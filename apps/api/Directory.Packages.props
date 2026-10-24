@@ -1,0 +1,7 @@
+<Project>
+  <!-- Versions pinned to stable releases published at least two weeks before adoption (see DECISIONS.md). -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+</Project>
