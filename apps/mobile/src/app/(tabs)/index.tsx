@@ -1,0 +1,296 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { RefreshControl, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
+
+import { Amount } from '@/components/Amount';
+import { AppText } from '@/components/AppText';
+import { BudgetRing } from '@/components/BudgetRing';
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { Icon } from '@/components/Icon';
+import { Screen } from '@/components/Screen';
+import { EmptyState, ErrorState, LoadingState } from '@/components/States';
+import { TransactionRow } from '@/components/TransactionRow';
+import { formatINRWhole } from '@/domain/money';
+import type { Transaction } from '@/domain/transaction';
+import { formatDayLabel } from '@/lib/format';
+import { ringTone, yesterdayLine, type RingTone } from '@/lib/today';
+import { refreshFromDevice } from '@/services/bootstrap';
+import { useImportStatus } from '@/state/importStatus';
+import { invalidateAll, useToday, type TodayData } from '@/state/queries';
+import { useTheme } from '@/theme/ThemeProvider';
+import { RADIUS, SPACE } from '@/theme/tokens';
+
+export default function TodayScreen() {
+  const today = useToday();
+  const client = useQueryClient();
+  const importing = useImportStatus((s) => s.importing);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshFromDevice();
+    } finally {
+      await invalidateAll(client);
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <Screen
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      footer={
+        today.data ? (
+          <Button
+            label="Add cash spend"
+            icon="add"
+            onPress={() => router.push('/add')}
+            accessibilityHint="Opens a quick form to record a cash payment"
+          />
+        ) : undefined
+      }
+    >
+      {today.isPending ? (
+        <LoadingState label="Loading today's budget" />
+      ) : today.isError ? (
+        <ErrorState onRetry={() => today.refetch()} />
+      ) : !today.data ? (
+        <EmptyState
+          icon="wallet-outline"
+          title="Set up your budget"
+          body="Tell us your salary and fixed costs to get a daily budget."
+          actionLabel="Start"
+          onAction={() => router.replace('/onboarding')}
+        />
+      ) : (
+        <TodayContent data={today.data} importing={importing} />
+      )}
+    </Screen>
+  );
+}
+
+function TodayContent({ data, importing }: { data: TodayData; importing: boolean }) {
+  const { snapshot, transactions, streak } = data;
+  const tone = ringTone(snapshot.usedRatio);
+  const remaining = snapshot.remainingTodayPaise;
+  const over = remaining < 0;
+  const fraction =
+    snapshot.todayBudgetPaise > 0 ? Math.max(0, remaining) / snapshot.todayBudgetPaise : 0;
+  const needsReview = transactions.filter((t) => t.needsReview).length;
+  const yesterday = yesterdayLine(data.yesterday);
+
+  return (
+    <>
+      <View style={styles.header}>
+        <View>
+          <AppText variant="caption" color="muted">
+            {formatDayLabel(data.today, data.today)} · {snapshot.daysLeft}{' '}
+            {snapshot.daysLeft === 1 ? 'day' : 'days'} left in cycle
+          </AppText>
+          <AppText variant="title" accessibilityRole="header">
+            Today
+          </AppText>
+        </View>
+        {streak > 0 ? <StreakPill days={streak} /> : null}
+      </View>
+
+      <BudgetRing
+        remainingFraction={fraction}
+        tone={tone}
+        accessibilityLabel={
+          over
+            ? `Over today's budget by ${formatINRWhole(-remaining)}. Budget ${formatINRWhole(snapshot.todayBudgetPaise)}.`
+            : `${formatINRWhole(remaining)} left today of ${formatINRWhole(snapshot.todayBudgetPaise)}.`
+        }
+      >
+        <AppText variant="caption" color={over ? 'coralText' : 'muted'}>
+          {over ? 'Over budget' : 'Left today'}
+        </AppText>
+        <Amount
+          paise={Math.abs(remaining)}
+          variant="hero"
+          color={over ? 'coralText' : tone === 'warn' ? 'amberText' : 'text'}
+          animated
+        />
+        <AppText variant="caption" color="muted" tabular>
+          of {formatINRWhole(snapshot.todayBudgetPaise)}
+        </AppText>
+      </BudgetRing>
+
+      <StatusLine tone={tone} usedRatio={snapshot.usedRatio} budget={snapshot.todayBudgetPaise} />
+
+      <View style={styles.stats}>
+        <Stat label="Spent today" paise={snapshot.spentTodayPaise} />
+        <Stat
+          label="Left this cycle"
+          paise={Math.max(
+            0,
+            snapshot.spendablePaise - snapshot.spentBeforeTodayPaise - snapshot.spentTodayPaise,
+          )}
+        />
+      </View>
+
+      {yesterday ? (
+        <AppText color="muted" center>
+          {yesterday}
+        </AppText>
+      ) : null}
+
+      {importing ? (
+        <Card>
+          <AppText variant="bodyStrong">Reading your bank SMS…</AppText>
+          <AppText color="muted">
+            Importing the last 90 days from bank senders only. This takes a few seconds.
+          </AppText>
+        </Card>
+      ) : null}
+
+      {needsReview > 0 ? (
+        <Card
+          onPress={() => router.push('/(tabs)/transactions')}
+          accessibilityLabel={`${needsReview} payments need a category. Opens transactions.`}
+        >
+          <View style={styles.row}>
+            <Icon name="pricetag-outline" color="amberText" />
+            <AppText variant="bodyStrong" style={styles.flex}>
+              {needsReview} {needsReview === 1 ? 'payment needs' : 'payments need'} a category
+            </AppText>
+            <Icon name="chevron-forward" size={18} color="muted" />
+          </View>
+        </Card>
+      ) : null}
+
+      <AppText variant="heading" accessibilityRole="header">
+        Today&apos;s spending
+      </AppText>
+      <TodayList transactions={transactions} />
+    </>
+  );
+}
+
+function StatusLine({
+  tone,
+  usedRatio,
+  budget,
+}: {
+  tone: RingTone;
+  usedRatio: number;
+  budget: number;
+}) {
+  const text =
+    budget === 0
+      ? "This cycle's spendable money is used up. Fixed costs and savings are still covered."
+      : tone === 'over'
+        ? "You're over today's budget. Tomorrow's budget adjusts automatically."
+        : tone === 'warn'
+          ? `You've used ${Math.round(usedRatio * 100)}% of today's budget.`
+          : 'You are within budget. Nice and steady.';
+  return (
+    <View style={styles.statusLine} accessibilityLiveRegion="polite">
+      <Icon
+        name={
+          tone === 'over'
+            ? 'alert-circle-outline'
+            : tone === 'warn'
+              ? 'time-outline'
+              : 'leaf-outline'
+        }
+        size={18}
+        color={tone === 'over' ? 'coralText' : tone === 'warn' ? 'amberText' : 'accentText'}
+      />
+      <AppText variant="caption" color="muted" style={styles.flex}>
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+function Stat({ label, paise }: { label: string; paise: number }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.stat, { backgroundColor: colors.surface }]}>
+      <AppText variant="caption" color="muted">
+        {label}
+      </AppText>
+      <Amount paise={paise} variant="heading" animated />
+    </View>
+  );
+}
+
+function StreakPill({ days }: { days: number }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[styles.pill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessible
+      accessibilityLabel={`${days} ${days === 1 ? 'day' : 'days'} in a row on budget`}
+    >
+      <Icon name="checkmark-circle" size={16} color="accentText" />
+      <AppText variant="caption" tabular>
+        {days}-day streak
+      </AppText>
+    </View>
+  );
+}
+
+/** New transactions slide in at the top; rows already on screen at first render do not animate. */
+function TodayList({ transactions }: { transactions: Transaction[] }) {
+  const { reducedMotion } = useTheme();
+  const [initialIds] = useState(() => new Set(transactions.map((t) => t.id)));
+
+  if (transactions.length === 0) {
+    return (
+      <EmptyState
+        icon="cafe-outline"
+        title="No spending yet today"
+        body="Payments from your bank SMS appear here automatically. Paid in cash? Add it below."
+      />
+    );
+  }
+
+  return (
+    <View style={styles.list}>
+      {transactions.map((tx) => {
+        const isNew = !initialIds.has(tx.id);
+        return (
+          <Animated.View
+            key={tx.id}
+            entering={
+              isNew ? (reducedMotion ? FadeIn.duration(200) : FadeInDown.duration(280)) : undefined
+            }
+            layout={reducedMotion ? undefined : LinearTransition.duration(220)}
+          >
+            <TransactionRow tx={tx} onPress={() => router.push(`/transaction/${tx.id}`)} />
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  stats: { flexDirection: 'row', gap: SPACE.md },
+  stat: { flex: 1, padding: SPACE.lg, borderRadius: RADIUS.md, gap: 2 },
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    justifyContent: 'center',
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  flex: { flex: 1 },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+  },
+  list: { gap: SPACE.sm },
+});

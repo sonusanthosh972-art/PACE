@@ -1,23 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
 
-// Placeholder home screen; replaced by the Today screen in Phase 5.
+import { useSettings } from '@/state/queries';
+
+/** Entry: onboarding until a budget profile exists, then the Today tab. */
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Paisa Pulse</Text>
-    </View>
-  );
+  const settings = useSettings();
+  if (settings.isPending) return null;
+  return <Redirect href={settings.data?.onboardingComplete ? '/(tabs)' : '/onboarding'} />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#16171A',
-  },
-  title: {
-    color: '#E9E7E2',
-    fontSize: 17,
-  },
-});

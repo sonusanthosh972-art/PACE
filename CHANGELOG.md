@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 5: Screens, design system, animations (2026-10-24)
+
+### Added
+- Design tokens (`src/theme/tokens.ts`): the specified dark/light palettes, spacing, radii, Inter type scale
+  (hero 52pt, body 16pt, line height 1.5), motion constants. ThemeProvider: system theme by default, manual
+  override, Reduce Motion flag. Contrast is enforced by tests (≥ 4.5:1 for every text token on every surface).
+- Components: AppText (tabular numbers, font scaling), Screen, Card + PressableScale (0.97 spring press),
+  Button (haptics, ≥ 48dp), Amount (number roll-up), BudgetRing (Skia + Reanimated, 600 ms spring from 0,
+  eases on new transactions), TransactionRow (full spoken description), Chip, MoneyField (returns paise),
+  TextField, CategoryGrid, DayPicker, Segmented, ListRow/SwitchRow, StepHeader, FixedExpensesEditor,
+  BudgetPreview, Donut and DailyBars charts (Skia), Loading/Empty/Error states.
+- Screens (Expo Router): onboarding (welcome, salary + payday, fixed expenses, savings goal, permissions hub,
+  one explainer screen per permission before the system prompt); tabs Today, Insights, Transactions, Settings;
+  quick-add sheet; transaction sheet (re-categorise → rule, "Not an expense", delete manual entry); settings for
+  salary/savings, fixed expenses, notification times, theme, data sources, CSV export, and an in-app
+  "Delete all my data" confirmation (type DELETE).
+- Transactions: search, range/mode/category filters, FlashList grouped by day, swipe actions
+  (Category / Not an expense) with equivalent screen-reader actions.
+- Today: ring + rolling "left today", status line with icon + text, spent today / left this cycle, yesterday line,
+  on-budget streak, "needs a category" nudge, today's list where new rows slide in (fade with Reduce Motion),
+  light haptic on new transactions, pull to refresh, import progress note.
+- Sample data mode ("Explore with sample data" on the welcome screen) so the UI can be tried without SMS.
+- Device sync: first-run 90-day import after onboarding, live SMS events, refresh on resume (rolls the day over).
+- Tests: palette contrast, formatting/CSV, today helpers, components, delete-data flow (216 mobile tests total).
+
+### Fixes during the self-check loop
+1. Light-theme button text on the spec green (#3E8E6B) was 3.8:1 → added `accentFill` (#2F7356) for button fills.
+2. `StyleSheet.absoluteFillObject` no longer exists in RN 0.86 → explicit absolute style.
+3. React Compiler lint: `Date.now()` during render (3 screens) → `useTodayKey()` hook; ref read during render
+   (Today list) → lazy state; closure reassignment in the donut → plain loop; synchronous setState in an
+   effect (`useCountUp`) → derive the value when not animating.
+4. Reanimated 4 in Jest (`loadUnpackers` undefined) → `react-native-worklets/jest/resolver.js` + `setUpTests()`.
+5. Verified Metro can bundle the whole app (`expo export --platform android`, 2,339 modules).
+
 ## Phase 4: Kotlin SMS + notification module (2026-10-24)
 
 ### Added

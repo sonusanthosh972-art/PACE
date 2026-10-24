@@ -72,10 +72,10 @@ A ~60-line in-repo loader (`Configuration/DotEnv.cs`) instead of a NuGet package
 up from the working directory, never overrides real environment variables, and never logs
 values. Precedence: real environment → `.env` → `dotnet user-secrets`.
 
-## D10. Docker is not installed
+## D10. No Docker
 
-Testcontainers (Phase 7 API integration tests) needs a Docker-compatible runtime.
-To be resolved in Phase 7 (Docker Desktop, Colima or OrbStack); flagged to the user.
+Per the user, Docker/Testcontainers are out. API integration tests (Phase 7) will use an embedded `mongod`
+binary instead, so they still exercise the real MongoDB driver and indexes.
 
 ## D11. SMS dates
 
@@ -119,3 +119,30 @@ notification-only mode.
 
 Repositories depend on a small `SqlDb` interface matching expo-sqlite. Tests use Node 24's built-in
 `node:sqlite`, so real SQL (constraints, ON CONFLICT, LIKE escapes) is exercised without a native module.
+
+## D18. Colour tokens for text vs graphics
+
+The spec's light-theme accent, amber and coral (#3E8E6B, #B07C2A, #B85A4A) are below 4.5:1 as body text on
+the light background. They are kept for graphics (ring, bars, donut, large numbers), and separate `*Text`
+tokens (#2F7356, #85601F, #9E4536) plus `accentFill` for buttons are used wherever text sits on them. In dark
+mode both sets are the spec colours. A unit test enforces the ratios.
+
+## D19. Number roll-up runs on the JS thread
+
+The ring animates on the UI thread (Skia + Reanimated). The rolling number uses a short requestAnimationFrame
+tween so it stays a real `<Text>` (screen readers read the final value via accessibilityLabel) without
+`TextInput` hacks or `any` casts. It is ~40 frames per change and is skipped entirely with Reduce Motion.
+
+## D20. No looping animations; skeletons are static
+
+Loading states are static placeholder blocks faded in once (no shimmer), per "no infinite looping animations".
+
+## D21. Sample data mode in Phase 5
+
+Pulled forward from Phase 9 so the screens can be seen without real bank SMS. It writes a fixed, seeded set of
+payments for the current cycle and a sample salary/fixed-cost profile; "Delete all my data" clears it.
+
+## D22. Day rollover
+
+The frozen daily budget is created on first access of each IST day, and the app refreshes on resume and at
+midnight (`useTodayKey`), so "00:00" semantics hold without a background job.
