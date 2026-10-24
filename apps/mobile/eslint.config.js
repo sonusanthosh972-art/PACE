@@ -13,4 +13,9 @@ module.exports = defineConfig([
       '@typescript-eslint/ban-ts-comment': 'error',
     },
   },
+  {
+    // Test helper backed by Node's built-in SQLite, newer than the import resolver's builtin list.
+    files: ['src/data/testing/**'],
+    settings: { 'import/core-modules': ['node:sqlite'] },
+  },
 ]);

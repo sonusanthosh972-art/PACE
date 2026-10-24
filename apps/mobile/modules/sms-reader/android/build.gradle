@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.paisapulse.smsreader'
+version = '0.1.0'
+
+android {
+  namespace "com.paisapulse.smsreader"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lint {
+    abortOnError true
+  }
+}
+
+dependencies {
+  // HeadlessJsTaskService (wakes JS to ingest SMS while the app is closed).
+  implementation 'com.facebook.react:react-android'
+  testImplementation 'junit:junit:4.13.2'
+}

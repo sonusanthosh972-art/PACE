@@ -76,3 +76,46 @@ values. Precedence: real environment → `.env` → `dotnet user-secrets`.
 
 Testcontainers (Phase 7 API integration tests) needs a Docker-compatible runtime.
 To be resolved in Phase 7 (Docker Desktop, Colima or OrbStack); flagged to the user.
+
+## D11. SMS dates
+
+`occurredAt` is the SMS receive timestamp, not a date parsed from the body: banks send alerts within
+seconds, and body dates vary by bank and usually omit the time.
+
+## D12. Dedupe details
+
+- `dedupeHash = sha256(upiRef)` if present, else `sha256(amount|last4|minuteBucket)` (as specified). Manual
+  entries hash a random id, so they never collide.
+- Window rule (±3 min, same amount and direction): same last4 → duplicate; different last4 → not; otherwise a
+  loose merchant match, or an SMS vs app notification pair (notifications rarely carry the account) → duplicate.
+- Two different references are always two payments.
+- On a window match the existing row is enriched (upiRef, last4, balance) and keeps its id and hash.
+
+## D13. What counts as spend
+
+Debits that are not excluded ("Not an expense") and not in a fixed category (Rent & EMI; those are budgeted
+via fixed expenses). Credits never reduce spend. IMPS/NEFT debits and phone-number VPAs default to
+"Transfers to people"; credits are "Other".
+
+## D14. Budget rounding and freezing
+
+`todayBudget` is rounded half-up to the paisa (5000000/30 → 166667 = ₹1,666.67). It is frozen per IST date in
+`daily_budgets` on first access. Because it only depends on spending *before* today, freezing at 14:00 gives
+the same number as 00:00. Changing the profile clears today's and future frozen budgets.
+
+## D15. Live SMS while the app is closed
+
+Native receivers always enqueue first, then either emit an event (JS running) or start a headless JS task.
+If Android blocks a background service start, the queue is drained at the next app start. Raw text lives
+only in that app-private queue until parsed.
+
+## D16. SMS permissions and Play Store
+
+READ_SMS/RECEIVE_SMS are restricted on Google Play (only default SMS apps or approved exceptions). This
+build is intended for sideloading/personal use; a Play release would need a permissions declaration or
+notification-only mode.
+
+## D17. Repository tests use node:sqlite
+
+Repositories depend on a small `SqlDb` interface matching expo-sqlite. Tests use Node 24's built-in
+`node:sqlite`, so real SQL (constraints, ON CONFLICT, LIKE escapes) is exercised without a native module.

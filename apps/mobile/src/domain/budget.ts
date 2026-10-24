@@ -1,0 +1,177 @@
+import { CATEGORIES, type CategoryId } from './categories';
+import { divideRound, sumPaise, type Paise } from './money';
+import { addDays, daysInMonth, diffDays, formatYmd, parseDateKey, type DateKey } from './time';
+import type { Direction } from './transaction';
+
+export interface FixedExpense {
+  id: string;
+  name: string;
+  amountPaise: Paise;
+  dueDay: number; // 1–31
+}
+
+export interface BudgetProfile {
+  monthlySalaryPaise: Paise;
+  payday: number; // 1–31
+  fixedExpenses: readonly FixedExpense[];
+  monthlySavingsGoalPaise: Paise;
+}
+
+export interface Cycle {
+  start: DateKey; // payday (inclusive)
+  end: DateKey; // day before the next payday (inclusive)
+  totalDays: number;
+}
+
+/** Payday clamped to the month length: payday 31 in February → 28th/29th. */
+export function effectivePayday(year: number, month: number, payday: number): number {
+  return Math.min(Math.max(1, Math.trunc(payday)), daysInMonth(year, month));
+}
+
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
+/** The salary cycle containing `today`. */
+export function cycleFor(today: DateKey, payday: number): Cycle {
+  const { year, month, day } = parseDateKey(today);
+  const thisMonthPayday = effectivePayday(year, month, payday);
+
+  const startMonth = day >= thisMonthPayday ? { year, month } : shiftMonth(year, month, -1);
+  const start = formatYmd(
+    startMonth.year,
+    startMonth.month,
+    effectivePayday(startMonth.year, startMonth.month, payday),
+  );
+  const next = shiftMonth(startMonth.year, startMonth.month, 1);
+  const nextStart = formatYmd(
+    next.year,
+    next.month,
+    effectivePayday(next.year, next.month, payday),
+  );
+  const end = addDays(nextStart, -1);
+
+  return { start, end, totalDays: diffDays(start, end) + 1 };
+}
+
+/** Days remaining in the cycle including today (minimum 1). */
+export function daysLeftInCycle(today: DateKey, cycle: Cycle): number {
+  return Math.max(1, diffDays(today, cycle.end) + 1);
+}
+
+/** spendable = salary − Σ fixedExpenses − savingsGoal (may be negative). */
+export function spendableForCycle(profile: BudgetProfile): Paise {
+  return (
+    profile.monthlySalaryPaise -
+    sumPaise(profile.fixedExpenses.map((f) => f.amountPaise)) -
+    profile.monthlySavingsGoalPaise
+  );
+}
+
+export interface SpendLike {
+  amountPaise: Paise;
+  direction: Direction;
+  category: CategoryId;
+  isExcluded: boolean;
+}
+
+/**
+ * Counts against the daily budget: non-excluded debits that are not fixed-expense payments.
+ * Self-transfers are excluded by the user ("Not an expense"), which sets isExcluded.
+ */
+export function countsAsSpend(tx: SpendLike): boolean {
+  return tx.direction === 'debit' && !tx.isExcluded && !CATEGORIES[tx.category].isFixed;
+}
+
+export function totalSpend(txs: readonly SpendLike[]): Paise {
+  return sumPaise(txs.filter(countsAsSpend).map((t) => t.amountPaise));
+}
+
+/** todayBudget = max(0, (spendable − spentBeforeToday) ÷ daysLeft), rounded to the paisa. */
+export function computeTodayBudget(args: {
+  spendablePaise: Paise;
+  spentBeforeTodayPaise: Paise;
+  daysLeft: number;
+}): Paise {
+  const remaining = args.spendablePaise - args.spentBeforeTodayPaise;
+  if (remaining <= 0) return 0;
+  return divideRound(remaining, Math.max(1, Math.trunc(args.daysLeft)));
+}
+
+/** remainingToday = todayBudget − spentToday (negative means overspent). */
+export function remainingToday(todayBudgetPaise: Paise, spentTodayPaise: Paise): Paise {
+  return todayBudgetPaise - spentTodayPaise;
+}
+
+export interface BudgetSnapshot {
+  cycle: Cycle;
+  daysLeft: number;
+  spendablePaise: Paise;
+  spentBeforeTodayPaise: Paise;
+  spentTodayPaise: Paise;
+  todayBudgetPaise: Paise;
+  remainingTodayPaise: Paise;
+  /** Fraction of today's budget used; > 1 when overspent; 1 when the budget is 0 and anything was spent. */
+  usedRatio: number;
+}
+
+/**
+ * Full snapshot for a day. `frozenTodayBudgetPaise` is the value computed at 00:00 and stored;
+ * when absent it is computed now from spending before today (which is what 00:00 would have seen).
+ */
+export function snapshotForDay(args: {
+  profile: BudgetProfile;
+  today: DateKey;
+  cycleSpendBeforeTodayPaise: Paise;
+  spentTodayPaise: Paise;
+  frozenTodayBudgetPaise?: Paise | null;
+}): BudgetSnapshot {
+  const cycle = cycleFor(args.today, args.profile.payday);
+  const daysLeft = daysLeftInCycle(args.today, cycle);
+  const spendablePaise = spendableForCycle(args.profile);
+  const todayBudgetPaise =
+    args.frozenTodayBudgetPaise ??
+    computeTodayBudget({
+      spendablePaise,
+      spentBeforeTodayPaise: args.cycleSpendBeforeTodayPaise,
+      daysLeft,
+    });
+  const usedRatio =
+    todayBudgetPaise > 0
+      ? args.spentTodayPaise / todayBudgetPaise
+      : args.spentTodayPaise > 0
+        ? 1
+        : 0;
+
+  return {
+    cycle,
+    daysLeft,
+    spendablePaise,
+    spentBeforeTodayPaise: args.cycleSpendBeforeTodayPaise,
+    spentTodayPaise: args.spentTodayPaise,
+    todayBudgetPaise,
+    remainingTodayPaise: remainingToday(todayBudgetPaise, args.spentTodayPaise),
+    usedRatio,
+  };
+}
+
+export interface DayResult {
+  date: DateKey;
+  budgetPaise: Paise;
+  spentPaise: Paise;
+}
+
+/**
+ * Consecutive completed days (ending yesterday) on which spending stayed within budget.
+ * Days with no stored record break the streak.
+ */
+export function onBudgetStreak(today: DateKey, days: readonly DayResult[]): number {
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  let streak = 0;
+  for (let date = addDays(today, -1); ; date = addDays(date, -1)) {
+    const day = byDate.get(date);
+    if (!day || day.spentPaise > day.budgetPaise) return streak;
+    streak += 1;
+  }
+}

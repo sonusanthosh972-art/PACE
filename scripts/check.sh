@@ -9,7 +9,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
   # shellcheck disable=SC1091
   . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
-  (cd "$ROOT" && nvm use >/dev/null)
+  cd "$ROOT" && nvm use >/dev/null
+fi
+REQUIRED_NODE="v$(tr -d '[:space:]' < "$ROOT/.nvmrc")"
+if [ "$(node -v)" != "$REQUIRED_NODE" ]; then
+  echo "Node $REQUIRED_NODE required (found $(node -v)). Run: nvm install" >&2
+  exit 1
 fi
 if [ -x "$HOME/.dotnet/dotnet" ]; then
   export DOTNET_ROOT="$HOME/.dotnet" PATH="$HOME/.dotnet:$PATH"
@@ -34,8 +39,8 @@ if [ "${1:-}" = "--android" ]; then
   if [ ! -d android ]; then
     step "android: expo prebuild"; CI=1 npx expo prebuild --platform android --no-install
   fi
-  step "android: gradlew assembleDebug"
-  (cd android && ./gradlew assembleDebug --console=plain)
+  step "android: Kotlin unit tests + gradlew assembleDebug"
+  (cd android && ./gradlew :sms-reader:testDebugUnitTest assembleDebug --console=plain)
 fi
 
 printf '\nAll checks passed.\n'
