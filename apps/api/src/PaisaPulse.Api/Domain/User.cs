@@ -22,7 +22,7 @@ public sealed class User
 
     public string Timezone { get; set; } = "Asia/Kolkata";
 
-    public string? RefreshToken { get; set; }
+    public string? RefreshTokenHash { get; set; }
 
     public DateTime? RefreshTokenExpiresAt { get; set; }
 

@@ -112,21 +112,18 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // CORS
-builder.Services.AddCors(options =>
+// CORS: Locked down. Mobile app uses native networking and does not require browser CORS.
+// CORS is only registered if explicit, non-wildcard origins are configured.
+var corsOrigins = settings.CorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+var hasExplicitCors = corsOrigins.Length > 0 && !corsOrigins.Contains("*");
+if (hasExplicitCors)
 {
-    options.AddPolicy("PaisaPulseCors", policy =>
+    builder.Services.AddCors(options =>
     {
-        if (builder.Environment.IsDevelopment() || settings.CorsOrigins == "*")
-        {
-            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-        }
-        else
-        {
-            var origins = settings.CorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
-        }
+        options.AddPolicy("PaisaPulseCors", policy =>
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod());
     });
-});
+}
 
 // Hangfire for Nightly Jobs
 builder.Services.AddHangfire(configuration => configuration
@@ -157,7 +154,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.UseCors("PaisaPulseCors");
+if (hasExplicitCors)
+{
+    app.UseCors("PaisaPulseCors");
+}
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -165,7 +165,7 @@ app.UseAuthorization();
 // Map API endpoints
 app.MapPaisaPulseEndpoints();
 
-// Initialize MongoDB indexes on startup
+// Initialize MongoDB indexes on startup (must fail fast to prevent duplicate payments)
 try
 {
     using var scope = app.Services.CreateScope();
@@ -174,7 +174,8 @@ try
 }
 catch (Exception ex)
 {
-    Log.Warning(ex, "MongoDB index initialization deferred or failed during startup: {Message}", ex.Message);
+    Log.Fatal(ex, "MongoDB index initialization failed on startup. Aborting startup to prevent duplicate payments.");
+    throw new InvalidOperationException("Failed to initialize MongoDB indexes on startup.", ex);
 }
 
 // Schedule Nightly Hangfire Job at midnight IST (00:00 IST)

@@ -5,9 +5,15 @@ namespace PaisaPulse.Api.Tests.Configuration;
 public sealed class ApiSettingsTests
 {
     private const string SecretUri = "mongodb+srv://alice:s3cr3t-pass@cluster0.example.net/paisapulse";
+    private const string ValidSecret = "default-valid-test-secret-at-least-32-chars!";
 
-    private static Func<string, string?> Env(string? mongoUri) =>
-        name => name == ApiSettings.MongoDbUriVariable ? mongoUri : null;
+    private static Func<string, string?> Env(string? mongoUri, string? jwtSecret = ValidSecret) =>
+        name => name switch
+        {
+            ApiSettings.MongoDbUriVariable => mongoUri,
+            ApiSettings.JwtSecretVariable => jwtSecret,
+            _ => null
+        };
 
     [Theory]
     [InlineData(null)]
@@ -18,6 +24,18 @@ public sealed class ApiSettingsTests
         var ex = Assert.Throws<InvalidOperationException>(() => ApiSettings.FromEnvironment(Env(value)));
 
         Assert.Contains(ApiSettings.MongoDbUriVariable, ex.Message, StringComparison.Ordinal);
+        Assert.Contains(".env.example", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FromEnvironmentFailsFastWhenJwtSecretMissing(string? secret)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => ApiSettings.FromEnvironment(Env(SecretUri, secret)));
+
+        Assert.Contains(ApiSettings.JwtSecretVariable, ex.Message, StringComparison.Ordinal);
         Assert.Contains(".env.example", ex.Message, StringComparison.Ordinal);
     }
 

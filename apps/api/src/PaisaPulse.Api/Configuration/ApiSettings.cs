@@ -7,14 +7,13 @@ internal sealed record ApiSettings(
     string JwtSecret,
     string JwtIssuer = "PaisaPulse.Api",
     string JwtAudience = "PaisaPulse.Mobile",
-    string CorsOrigins = "*")
+    string CorsOrigins = "")
 {
     public const string MongoDbUriVariable = "MONGODB_URI";
     public const string JwtSecretVariable = "JWT_SECRET";
     public const string DatabaseNameVariable = "MONGODB_DATABASE";
     public const string CorsOriginsVariable = "CORS_ORIGINS";
     public const string DefaultDatabaseName = "paisapulse";
-    public const string DefaultJwtSecret = "paisa-pulse-dev-secret-key-must-be-at-least-32-chars-long!";
 
     /// <summary>
     /// Reads and validates settings. Throws <see cref="InvalidOperationException"/> with an
@@ -51,18 +50,17 @@ internal sealed record ApiSettings(
         var jwtSecret = getVariable(JwtSecretVariable)?.Trim();
         if (string.IsNullOrWhiteSpace(jwtSecret))
         {
-            jwtSecret = DefaultJwtSecret;
+            throw new InvalidOperationException(
+                $"{JwtSecretVariable} is not set. Copy apps/api/.env.example to apps/api/.env and fill it in, "
+                    + $"or run: dotnet user-secrets set {JwtSecretVariable} \"<secret>\"");
         }
-        else if (jwtSecret.Length < 32)
+
+        if (jwtSecret.Length < 32)
         {
             throw new InvalidOperationException($"{JwtSecretVariable} must be at least 32 characters long.");
         }
 
-        var corsOrigins = getVariable(CorsOriginsVariable)?.Trim();
-        if (string.IsNullOrWhiteSpace(corsOrigins))
-        {
-            corsOrigins = "*";
-        }
+        var corsOrigins = getVariable(CorsOriginsVariable)?.Trim() ?? string.Empty;
 
         return new ApiSettings(mongoUri, dbName, jwtSecret, CorsOrigins: corsOrigins);
     }

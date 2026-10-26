@@ -31,10 +31,32 @@ public sealed class TransactionRepository(IMongoDatabase database) : ITransactio
                 Builders<Transaction>.Filter.Eq(t => t.UserId, userId),
                 Builders<Transaction>.Filter.Eq(t => t.DedupeHash, tx.DedupeHash));
 
-            var result = await _collection.ReplaceOneAsync(
+            var update = Builders<Transaction>.Update
+                .SetOnInsert(t => t.Id, tx.Id)
+                .SetOnInsert(t => t.UserId, userId)
+                .SetOnInsert(t => t.DedupeHash, tx.DedupeHash)
+                .SetOnInsert(t => t.OccurredAt, tx.OccurredAt)
+                .SetOnInsert(t => t.AmountPaise, tx.AmountPaise)
+                .SetOnInsert(t => t.Direction, tx.Direction)
+                .SetOnInsert(t => t.Mode, tx.Mode)
+                .SetOnInsert(t => t.Source, tx.Source)
+                .SetOnInsert(t => t.CreatedAt, tx.CreatedAt)
+                .Set(t => t.Category, tx.Category)
+                .Set(t => t.NeedsReview, tx.NeedsReview)
+                .Set(t => t.Note, tx.Note)
+                .Set(t => t.IsExcluded, tx.IsExcluded)
+                .Set(t => t.Merchant, tx.Merchant)
+                .Set(t => t.MerchantNorm, tx.MerchantNorm)
+                .Set(t => t.Vpa, tx.Vpa)
+                .Set(t => t.AccountLast4, tx.AccountLast4)
+                .Set(t => t.UpiRef, tx.UpiRef)
+                .Set(t => t.BalancePaise, tx.BalancePaise)
+                .Set(t => t.UpdatedAt, tx.UpdatedAt);
+
+            var result = await _collection.UpdateOneAsync(
                 filter,
-                tx,
-                new ReplaceOptions { IsUpsert = true },
+                update,
+                new UpdateOptions { IsUpsert = true },
                 cancellationToken: ct);
 
             if (result.UpsertedId is not null)

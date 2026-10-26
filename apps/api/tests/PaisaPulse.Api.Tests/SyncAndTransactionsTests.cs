@@ -109,6 +109,85 @@ public sealed class SyncAndTransactionsTests(MongoServerFixture fixture)
     }
 
     [Fact]
+    public async Task SyncSucceedsEvenWhenPaymentResyncedWithDifferentClientGeneratedId()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var factory = new PaisaPulseApiFactory(fixture);
+        var client = await CreateAuthenticatedClientAsync(factory, $"sync_diff_id_{Guid.NewGuid():N}@example.com", ct);
+
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var dedupe = ComputeHash("phone_reinstall_payment_123");
+
+        var originalTx = new TransactionItemDto(
+            Id: "phone_1_initial_id",
+            AmountPaise: 50000,
+            Direction: "debit",
+            Merchant: "Blinkit",
+            MerchantNorm: "blinkit",
+            Vpa: null,
+            Mode: "UPI",
+            AccountLast4: "5555",
+            UpiRef: "555555555555",
+            BalancePaise: null,
+            Category: "groceries",
+            NeedsReview: false,
+            Note: "Snacks",
+            Source: "sms",
+            OccurredAt: nowMs,
+            DedupeHash: dedupe,
+            IsExcluded: false,
+            CreatedAt: nowMs,
+            UpdatedAt: nowMs);
+
+        var resp1 = await client.PostAsJsonAsync(
+            new Uri("/api/v1/transactions/sync", UriKind.Relative),
+            new SyncTransactionsRequest([originalTx]),
+            ct);
+        Assert.Equal(HttpStatusCode.OK, resp1.StatusCode);
+
+        // App reinstalled on new phone -> payment has same dedupe hash but NEW client id "phone_2_after_reinstall_id"
+        var reinstalledTx = new TransactionItemDto(
+            Id: "phone_2_after_reinstall_id",
+            AmountPaise: 50000,
+            Direction: "debit",
+            Merchant: "Blinkit",
+            MerchantNorm: "blinkit",
+            Vpa: null,
+            Mode: "UPI",
+            AccountLast4: "5555",
+            UpiRef: "555555555555",
+            BalancePaise: null,
+            Category: "groceries",
+            NeedsReview: false,
+            Note: "Snacks (updated on new phone)",
+            Source: "sms",
+            OccurredAt: nowMs,
+            DedupeHash: dedupe,
+            IsExcluded: false,
+            CreatedAt: nowMs,
+            UpdatedAt: nowMs + 1000);
+
+        var resp2 = await client.PostAsJsonAsync(
+            new Uri("/api/v1/transactions/sync", UriKind.Relative),
+            new SyncTransactionsRequest([reinstalledTx]),
+            ct);
+        Assert.Equal(HttpStatusCode.OK, resp2.StatusCode);
+
+        var res2 = await resp2.Content.ReadFromJsonAsync<TransactionSyncResult>(cancellationToken: ct);
+        Assert.NotNull(res2);
+        Assert.Equal(0, res2.Inserted);
+        Assert.Equal(1, res2.Updated);
+
+        // Verify document retains original _id but has updated note
+        var listResp = await client.GetAsync(new Uri("/api/v1/transactions", UriKind.Relative), ct);
+        var paged = await listResp.Content.ReadFromJsonAsync<TransactionPagedResult>(cancellationToken: ct);
+        Assert.NotNull(paged);
+        Assert.Equal(1, paged.TotalCount);
+        Assert.Equal("phone_1_initial_id", paged.Items[0].Id);
+        Assert.Equal("Snacks (updated on new phone)", paged.Items[0].Note);
+    }
+
+    [Fact]
     public async Task GetTransactionsFiltersByCategoryAndDateRange()
     {
         var ct = TestContext.Current.CancellationToken;

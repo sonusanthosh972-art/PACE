@@ -22,9 +22,21 @@ public sealed class UserRepository(IMongoDatabase database) : IUserRepository
         return await _users.Find(u => u.Email == normalizedEmail).FirstOrDefaultAsync(ct);
     }
 
+    public static string HashRefreshToken(string refreshToken)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(refreshToken));
+        return Convert.ToHexStringLower(bytes);
+    }
+
     public async Task<User?> GetByRefreshTokenAsync(string refreshToken, CancellationToken ct = default)
     {
-        return await _users.Find(u => u.RefreshToken == refreshToken && u.RefreshTokenExpiresAt > DateTime.UtcNow)
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return null;
+        }
+
+        var hash = HashRefreshToken(refreshToken);
+        return await _users.Find(u => u.RefreshTokenHash == hash && u.RefreshTokenExpiresAt > DateTime.UtcNow)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -73,8 +85,9 @@ public sealed class UserRepository(IMongoDatabase database) : IUserRepository
         DateTime? expiresAt,
         CancellationToken ct = default)
     {
+        var hash = refreshToken is not null ? HashRefreshToken(refreshToken) : null;
         var update = Builders<User>.Update
-            .Set(u => u.RefreshToken, refreshToken)
+            .Set(u => u.RefreshTokenHash, hash)
             .Set(u => u.RefreshTokenExpiresAt, expiresAt)
             .Set(u => u.UpdatedAt, DateTime.UtcNow);
 

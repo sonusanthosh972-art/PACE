@@ -42,6 +42,15 @@ public sealed class DailySummaryRepository(IMongoDatabase database) : IDailySumm
             Builders<DailySummary>.Filter.Eq(s => s.UserId, summary.UserId),
             Builders<DailySummary>.Filter.Eq(s => s.DateKey, summary.DateKey));
 
-        await _collection.ReplaceOneAsync(filter, summary, new ReplaceOptions { IsUpsert = true }, ct);
+        var update = Builders<DailySummary>.Update
+            .SetOnInsert(s => s.Id, summary.Id)
+            .SetOnInsert(s => s.UserId, summary.UserId)
+            .SetOnInsert(s => s.DateKey, summary.DateKey)
+            .Set(s => s.BudgetPaise, summary.BudgetPaise)
+            .Set(s => s.SpentPaise, summary.SpentPaise)
+            .Set(s => s.TopCategory, summary.TopCategory)
+            .Set(s => s.CalculatedAt, summary.CalculatedAt);
+
+        await _collection.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = true }, ct);
     }
 }

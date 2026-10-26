@@ -147,11 +147,12 @@ payments for the current cycle and a sample salary/fixed-cost profile; "Delete a
 The frozen daily budget is created on first access of each IST day, and the app refreshes on resume and at
 midnight (`useTodayKey`), so "00:00" semantics hold without a background job.
 
-## D23. HTTPS enforcement vs Development HTTP
+## D23. HTTPS enforcement and CORS lockdown
 
-Production enforces HTTPS (`UseHsts` and `UseHttpsRedirection`), and CORS is restricted to configured origins.
-In development mode, plain HTTP is permitted so local phones and emulators (via USB `adb reverse` or local Wi-Fi IP)
-can communicate without Android untrusted TLS certificate errors.
+Production enforces HTTPS (`UseHsts` and `UseHttpsRedirection`). CORS is locked down: the phone app uses native
+networking and does not require browser CORS, so CORS is off unless explicit, non-wildcard origins are specified in
+`CORS_ORIGINS`. In development mode, plain HTTP is permitted so local phones and emulators (via USB `adb reverse` or
+local Wi-Fi IP) can communicate without Android untrusted TLS certificate errors.
 
 ## D24. Dockerless real MongoDB integration tests
 
@@ -159,13 +160,25 @@ Per requirement D10, Docker/Testcontainers are excluded. Integration tests use `
 native macOS Apple Silicon (arm64) `mongod` binaries. The binaries search root is explicitly pointed to the NuGet
 tools directory to avoid macOS TCC folder permission prompts when enumerating parent folders.
 
-## D25. Server-side transaction idempotency
+## D25. Server-side transaction idempotency and immutable _id preservation
 
 Transactions are scoped strictly by authenticated `userId` and deduplicated by a unique compound MongoDB index on
-`(userId, dedupeHash)`. Batch uploads via `/api/v1/transactions/sync` execute atomic upserts, guaranteeing that repeated
-or retry uploads never duplicate payments.
+`(userId, dedupeHash)`. Batch uploads via `/api/v1/transactions/sync` execute atomic `UpdateOneAsync` with `SetOnInsert`
+for `_id` and initial fields. This guarantees that re-uploading transactions—even with newly generated client IDs
+(e.g., after an app reinstallation)—updates metadata without attempting to modify MongoDB's immutable `_id`.
 
 ## D26. Hangfire nightly summaries job
 
 Hangfire schedules `DailySummaryJob` at midnight IST (`0 0 * * *` in Asia/Kolkata timezone). The job aggregates
 discretionary spend, yesterday's budget, amount spent, and top category, writing the results to `dailySummaries`.
+
+## D27. Hashed refresh tokens
+
+Refresh tokens are stored in MongoDB as SHA256 hashes (`RefreshTokenHash`), rather than plain text. A database
+breach does not expose usable refresh tokens to attackers.
+
+## D28. Fail-fast secrets and index startup enforcement
+
+`JWT_SECRET` must be at least 32 characters and never has a hardcoded fallback value; missing secrets abort startup
+immediately with actionable messages. MongoDB index initialization is mandatory: failure to create the indexes (including
+the deduplication index) aborts startup immediately rather than running degraded.

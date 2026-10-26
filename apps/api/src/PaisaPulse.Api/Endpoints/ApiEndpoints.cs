@@ -58,11 +58,11 @@ public static class ApiEndpoints
             await database.RunCommandAsync((Command<BsonDocument>)"{ping:1}", cancellationToken: ct);
             return Results.Ok(new { status = "healthy", database = "connected" });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return Results.Problem(
                 title: "Database connection failed",
-                detail: ex.Message,
+                detail: "The server could not establish a connection to the database.",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }
@@ -99,7 +99,7 @@ public static class ApiEndpoints
         };
 
         var tokens = tokenService.GenerateTokens(user);
-        user.RefreshToken = tokens.RefreshToken;
+        user.RefreshTokenHash = UserRepository.HashRefreshToken(tokens.RefreshToken);
         user.RefreshTokenExpiresAt = tokens.RefreshTokenExpiresAt;
 
         await userRepo.CreateAsync(user, ct);

@@ -18,7 +18,15 @@
   - Production HTTPS enforcement with development HTTP support for local device testing.
   - Sensitive credential masking in logs, exceptions, and `ToString()`.
 - Nightly Job (Hangfire): Scheduled at midnight IST to aggregate and store each user's `dailySummaries`.
-- Dockerless real MongoDB integration tests using `Mongo2Go` (v5.0.0) with 29 passing test cases covering auth, sync idempotency, cross-user isolation, validation errors, daily summary calculation, and health checks.
+- Dockerless real MongoDB integration tests using `Mongo2Go` (v5.0.0) with 33 passing test cases covering auth, sync idempotency, cross-user isolation, validation errors, daily summary calculation, and health checks.
+
+### Fixed
+- Hardcoded fallback JWT secret removed: server fails fast at startup if `JWT_SECRET` is missing or under 32 characters.
+- Refresh tokens stored as SHA256 hashes in MongoDB rather than plain text.
+- Health check sanitization: prevents leaking raw database exception messages or cluster hostnames.
+- CORS locked down: disabled by default; only explicit origins allowed.
+- Index setup enforcement: startup fails fast with an abort rather than running degraded if index setup fails.
+- Sync immutable `_id` bug: switched from `ReplaceOneAsync` to `UpdateOneAsync` with `SetOnInsert` for immutable identifiers so re-syncing payments with different client IDs updates cleanly without MongoDB error.
 
 ## Phase 5: Screens, design system, animations (2026-10-24)
 

@@ -30,7 +30,14 @@ public sealed class UserRuleRepository(IMongoDatabase database) : IUserRuleRepos
             Builders<UserRule>.Filter.Eq(r => r.UserId, userId),
             Builders<UserRule>.Filter.Eq(r => r.Pattern, rule.Pattern));
 
-        await _collection.ReplaceOneAsync(filter, rule, new ReplaceOptions { IsUpsert = true }, ct);
+        var update = Builders<UserRule>.Update
+            .SetOnInsert(r => r.Id, rule.Id)
+            .SetOnInsert(r => r.UserId, userId)
+            .SetOnInsert(r => r.Pattern, rule.Pattern)
+            .SetOnInsert(r => r.CreatedAt, rule.CreatedAt)
+            .Set(r => r.Category, rule.Category);
+
+        await _collection.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = true }, ct);
         return rule;
     }
 }
