@@ -1,14 +1,24 @@
 namespace PaisaPulse.Api.Configuration;
 
 /// <summary>Strongly typed, validated settings read from environment variables.</summary>
-internal sealed record ApiSettings(string MongoDbUri, string DatabaseName)
+internal sealed record ApiSettings(
+    string MongoDbUri,
+    string DatabaseName,
+    string JwtSecret,
+    string JwtIssuer = "PaisaPulse.Api",
+    string JwtAudience = "PaisaPulse.Mobile",
+    string CorsOrigins = "*")
 {
     public const string MongoDbUriVariable = "MONGODB_URI";
+    public const string JwtSecretVariable = "JWT_SECRET";
+    public const string DatabaseNameVariable = "MONGODB_DATABASE";
+    public const string CorsOriginsVariable = "CORS_ORIGINS";
     public const string DefaultDatabaseName = "paisapulse";
+    public const string DefaultJwtSecret = "paisa-pulse-dev-secret-key-must-be-at-least-32-chars-long!";
 
     /// <summary>
     /// Reads and validates settings. Throws <see cref="InvalidOperationException"/> with an
-    /// actionable message on failure. Error messages never include the secret value.
+    /// actionable message on failure. Error messages never include secret values.
     /// </summary>
     public static ApiSettings FromEnvironment(Func<string, string?> getVariable)
     {
@@ -32,9 +42,31 @@ internal sealed record ApiSettings(string MongoDbUri, string DatabaseName)
                 $"{MongoDbUriVariable} must start with mongodb:// or mongodb+srv://.");
         }
 
-        return new ApiSettings(mongoUri, DefaultDatabaseName);
+        var dbName = getVariable(DatabaseNameVariable)?.Trim();
+        if (string.IsNullOrWhiteSpace(dbName))
+        {
+            dbName = DefaultDatabaseName;
+        }
+
+        var jwtSecret = getVariable(JwtSecretVariable)?.Trim();
+        if (string.IsNullOrWhiteSpace(jwtSecret))
+        {
+            jwtSecret = DefaultJwtSecret;
+        }
+        else if (jwtSecret.Length < 32)
+        {
+            throw new InvalidOperationException($"{JwtSecretVariable} must be at least 32 characters long.");
+        }
+
+        var corsOrigins = getVariable(CorsOriginsVariable)?.Trim();
+        if (string.IsNullOrWhiteSpace(corsOrigins))
+        {
+            corsOrigins = "*";
+        }
+
+        return new ApiSettings(mongoUri, dbName, jwtSecret, CorsOrigins: corsOrigins);
     }
 
-    // Keep the connection string out of logs, exceptions and debugger displays.
-    public override string ToString() => $"ApiSettings {{ DatabaseName = {DatabaseName}, MongoDbUri = *** }}";
+    // Keep the connection string and secret out of logs, exceptions and debugger displays.
+    public override string ToString() => $"ApiSettings {{ DatabaseName = {DatabaseName}, MongoDbUri = ***, JwtSecret = *** }}";
 }

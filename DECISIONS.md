@@ -146,3 +146,26 @@ payments for the current cycle and a sample salary/fixed-cost profile; "Delete a
 
 The frozen daily budget is created on first access of each IST day, and the app refreshes on resume and at
 midnight (`useTodayKey`), so "00:00" semantics hold without a background job.
+
+## D23. HTTPS enforcement vs Development HTTP
+
+Production enforces HTTPS (`UseHsts` and `UseHttpsRedirection`), and CORS is restricted to configured origins.
+In development mode, plain HTTP is permitted so local phones and emulators (via USB `adb reverse` or local Wi-Fi IP)
+can communicate without Android untrusted TLS certificate errors.
+
+## D24. Dockerless real MongoDB integration tests
+
+Per requirement D10, Docker/Testcontainers are excluded. Integration tests use `Mongo2Go` (v5.0.0) which bundles
+native macOS Apple Silicon (arm64) `mongod` binaries. The binaries search root is explicitly pointed to the NuGet
+tools directory to avoid macOS TCC folder permission prompts when enumerating parent folders.
+
+## D25. Server-side transaction idempotency
+
+Transactions are scoped strictly by authenticated `userId` and deduplicated by a unique compound MongoDB index on
+`(userId, dedupeHash)`. Batch uploads via `/api/v1/transactions/sync` execute atomic upserts, guaranteeing that repeated
+or retry uploads never duplicate payments.
+
+## D26. Hangfire nightly summaries job
+
+Hangfire schedules `DailySummaryJob` at midnight IST (`0 0 * * *` in Asia/Kolkata timezone). The job aggregates
+discretionary spend, yesterday's budget, amount spent, and top category, writing the results to `dailySummaries`.

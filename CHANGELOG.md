@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 7: Backend API (.NET 10 + MongoDB) (2026-10-26)
+
+### Added
+- Database (MongoDB `paisapulse`): 5 collections (`users`, `fixedExpenses`, `transactions`, `userRules`, `dailySummaries`).
+- Automatic index setup on server startup, including unique compound index on `(userId, dedupeHash)` for zero duplicate transactions, unique email on `users`, and unique `(userId, dateKey)` on `dailySummaries`.
+- Accounts & Auth: BCrypt password hashing, JWT bearer access token generation, cryptographically secure 30-day refresh token rotation, `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`.
+- Profile & Fixed Expenses: `GET/PUT /api/v1/me/profile`, `GET/PUT /api/v1/me/fixed-expenses`.
+- Transaction Sync & Management: `POST /api/v1/transactions/sync` (idempotent atomic upserts), `GET /api/v1/transactions` (date/category filtering, pagination), `PATCH /api/v1/transactions/{id}` (category, excluded flag, note).
+- Insights: `GET /api/v1/insights/cycle` (spend total, category breakdown, small leaks, top merchants, essential split, cycle progress), `GET /api/v1/insights/daily`.
+- Account Deletion: `DELETE /api/v1/me` cascading removal of user account and all associated collections.
+- Health Check: `GET /health` and `GET /api/v1/health` with live MongoDB ping.
+- Safety & Security:
+  - Strict user-scoping on every repository query and endpoint.
+  - FluentValidation on every request body with RFC 7807 problem-details error formatting.
+  - Rate limiting (dedicated auth endpoint limiter and general API limiter).
+  - Production HTTPS enforcement with development HTTP support for local device testing.
+  - Sensitive credential masking in logs, exceptions, and `ToString()`.
+- Nightly Job (Hangfire): Scheduled at midnight IST to aggregate and store each user's `dailySummaries`.
+- Dockerless real MongoDB integration tests using `Mongo2Go` (v5.0.0) with 29 passing test cases covering auth, sync idempotency, cross-user isolation, validation errors, daily summary calculation, and health checks.
+
 ## Phase 5: Screens, design system, animations (2026-10-24)
 
 ### Added

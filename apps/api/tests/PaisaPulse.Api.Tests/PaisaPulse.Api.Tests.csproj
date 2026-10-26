@@ -5,6 +5,9 @@
     <RootNamespace>PaisaPulse.Api.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Mongo2Go" />
+    <PackageReference Include="MongoDB.Driver" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
   <ItemGroup>

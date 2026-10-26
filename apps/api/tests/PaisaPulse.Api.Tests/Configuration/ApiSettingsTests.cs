@@ -43,10 +43,29 @@ public sealed class ApiSettingsTests
     }
 
     [Fact]
-    public void ToStringMasksConnectionString()
+    public void ToStringMasksConnectionStringAndJwtSecret()
     {
-        var settings = ApiSettings.FromEnvironment(Env(SecretUri));
+        var env = new Dictionary<string, string>
+        {
+            [ApiSettings.MongoDbUriVariable] = SecretUri,
+            [ApiSettings.JwtSecretVariable] = "super-secret-jwt-signing-key-value-12345"
+        };
+        var settings = ApiSettings.FromEnvironment(k => env.GetValueOrDefault(k));
 
         Assert.DoesNotContain("s3cr3t-pass", settings.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("super-secret", settings.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FromEnvironmentRejectsShortJwtSecret()
+    {
+        var env = new Dictionary<string, string>
+        {
+            [ApiSettings.MongoDbUriVariable] = SecretUri,
+            [ApiSettings.JwtSecretVariable] = "too-short"
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ApiSettings.FromEnvironment(k => env.GetValueOrDefault(k)));
+        Assert.Contains(ApiSettings.JwtSecretVariable, ex.Message, StringComparison.Ordinal);
     }
 }
