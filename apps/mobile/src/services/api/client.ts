@@ -17,6 +17,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Hosted Paisa Pulse API (Render). Override with EXPO_PUBLIC_API_URL for local development. */
+export const DEFAULT_API_URL = 'https://paisapulse-apis.onrender.com';
+
 let customBaseUrl: string | null = null;
 
 export function setApiBaseUrl(url: string | null): void {
@@ -26,7 +29,7 @@ export function setApiBaseUrl(url: string | null): void {
 export function getApiBaseUrl(): string {
   if (customBaseUrl) return customBaseUrl;
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
-  return 'http://localhost:5080';
+  return DEFAULT_API_URL;
 }
 
 /** A sleeping free-tier server (e.g. Render) can take up to a minute to wake up. */

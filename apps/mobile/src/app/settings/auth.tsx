@@ -14,7 +14,12 @@ import { Screen } from '@/components/Screen';
 import { getAppDb } from '@/data/appDb';
 import { setSetting } from '@/data/settingsRepo';
 import { completeAccountFlow, type NextStep } from '@/services/accountFlow';
-import { getApiBaseUrl, setApiBaseUrl, testConnection } from '@/services/api/client';
+import {
+  DEFAULT_API_URL,
+  getApiBaseUrl,
+  setApiBaseUrl,
+  testConnection,
+} from '@/services/api/client';
 import { restoreFromServer } from '@/services/restore';
 import { syncNow } from '@/services/sync';
 import {
@@ -156,6 +161,19 @@ export default function AuthScreen() {
     }
   };
 
+  const onResetServerAddress = async () => {
+    setApiBaseUrl(null);
+    setServerAddress(getApiBaseUrl());
+    setServerStatusMessage(null);
+    setServerStatusSuccess(null);
+    try {
+      await setSetting(await getAppDb(), 'apiBaseUrl', null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    } catch {
+      // Ignore DB write errors
+    }
+  };
+
   const onSubmit = async () => {
     setError(null);
     const trimmedEmail = email.trim();
@@ -288,6 +306,15 @@ export default function AuthScreen() {
         />
         <Button label="Save address" variant="primary" compact onPress={onSaveServerAddress} />
       </View>
+      {serverAddress.trim().replace(/\/+$/, '') !== DEFAULT_API_URL ? (
+        <Button
+          label="Use the Paisa Pulse server"
+          variant="ghost"
+          compact
+          onPress={onResetServerAddress}
+          accessibilityHint={`Switches back to ${DEFAULT_API_URL}`}
+        />
+      ) : null}
       {serverStatusMessage ? (
         <AppText
           variant="caption"
