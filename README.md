@@ -26,3 +26,4 @@ cp apps/api/.env.example apps/api/.env   # then set MONGODB_URI
 npm run check            # typecheck, lint, tests, expo-doctor, dotnet build + test
 npm run check:android    # ...plus expo prebuild + gradlew assembleDebug
 ```
+# PACE
