@@ -92,14 +92,35 @@ export default function PermissionsStep() {
   return (
     <Screen
       edges={['top', 'bottom']}
-      footer={<Button label="Finish" onPress={finish} loading={finishing} />}
+      footer={
+        <Button
+          label="Open my peaceful budget"
+          icon="sparkles"
+          onPress={finish}
+          loading={finishing}
+        />
+      }
     >
       <StepHeader
         step={4}
         total={4}
-        title="Permissions"
-        body="Each one is explained before Android asks. You can change them later."
+        title="Private & respectful permissions"
+        body="We believe financial privacy is a sacred human right. Every permission is completely transparent and in your full control."
       />
+
+      <Card style={styles.privacyPledge}>
+        <View style={styles.pledgeRow}>
+          <Icon name="shield-checkmark" color="accentText" size={24} />
+          <View style={styles.flex}>
+            <AppText variant="bodyStrong">The Paisa Pulse Privacy Pledge</AppText>
+            <AppText variant="caption" color="muted">
+              Zero advertisements. Zero server uploads. Only bank transaction amounts are read. Your
+              personal life remains strictly yours.
+            </AppText>
+          </View>
+        </View>
+      </Card>
+
       <View style={styles.list}>
         {KINDS.map((kind) => {
           const copy = PERMISSION_COPY[kind];
@@ -120,8 +141,7 @@ export default function PermissionsStep() {
                 <View style={styles.flex}>
                   <AppText variant="bodyStrong">{copy.title}</AppText>
                   <AppText variant="caption" color={granted ? 'accentText' : 'muted'}>
-                    {granted ? '✓ ' : ''}
-                    {STATE_LABEL[state]}
+                    {granted ? '✓ Active · Protecting your peace' : STATE_LABEL[state]}
                   </AppText>
                 </View>
                 {state !== 'unavailable' ? (
@@ -137,14 +157,17 @@ export default function PermissionsStep() {
           {error}
         </AppText>
       ) : null}
-      <AppText variant="caption" color="muted">
-        Without SMS access you can still add payments by hand.
+      <AppText variant="caption" color="muted" center>
+        Optional: If you prefer not to grant permissions now, you can record payments by hand
+        anytime.
       </AppText>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  privacyPledge: { marginBottom: SPACE.md, padding: SPACE.md },
+  pledgeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   list: { gap: SPACE.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   flex: { flex: 1 },

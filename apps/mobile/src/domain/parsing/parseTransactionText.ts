@@ -25,6 +25,12 @@ const PROMO_RE =
 const SETUP_RE =
   /\b(has\s+been|is|was)\s+(successfully\s+)?(set\s*up|registered|created|activated|revoked|cancelled|paused)\b/i;
 
+const CC_BILL_RE =
+  /\b(cred|cc\s*payment|credit\s*card\s*(?:bill|pymt|payment)|card\s*payment|bbps\s*cc|autopay\s*cc|billdesk\*?cc|payment\s*towards\s*(?:your\s*)?(?:credit\s*)?card|payment\s*received\s*for\s*(?:your\s*)?(?:credit\s*)?card)\b/i;
+
+const SELF_TRANSFER_RE =
+  /\b(self[\s-]?transfer|transferred\s*to\s*(?:own|self)\s*a\/c|funds?\s*transfer\s*to\s*(?:own\s*)?a\/c|transfer\s*to\s*linked\s*a\/c)\b/i;
+
 /* ------------------------------------------------------------------------------------------
  * Field extractors.
  * ---------------------------------------------------------------------------------------- */
@@ -49,7 +55,7 @@ const DEBIT_RE =
 const CREDIT_RE = /\b(credited|received|deposited|refund(?:ed)?|reversed\s+to|added\s+to)\b/i;
 
 const ACCOUNT_RE =
-  /\b(?:a\/c|a\/c\s+no|ac|acct|account|card)\.?\s*(?:no\.?\s*)?(?:ending\s*(?:with|in)?\s*)?(?:[x*]+\s*)?(\d{3,4})\b/i;
+  /\b(?:a\/c|a\/c\s+no|ac|acct|account|card|onecard)\.?\s*(?:no\.?\s*)?(?:ending\s*(?:with|in)?\s*)?(?:[x*]+\s*)?(\d{3,4})\b/i;
 const MASKED_ACCOUNT_RE = /(?:^|[\s(])[x*]{2,}(\d{3,4})\b/i;
 
 const REF_RE =
@@ -128,7 +134,7 @@ function detectMode(text: string, vpa: string | null): Mode {
   if (/\bupi\b|\bvpa\b/i.test(text) || vpa) return 'UPI';
   if (/\bimps\b/i.test(text)) return 'IMPS';
   if (/\b(neft|rtgs)\b/i.test(text)) return 'NEFT';
-  if (/\b(card|pos|swiped?)\b/i.test(text)) return 'CARD';
+  if (/\b(card|pos|swiped?|onecard)\b/i.test(text)) return 'CARD';
   return 'OTHER';
 }
 
@@ -224,6 +230,15 @@ export function parseTransactionText(
   const accountMatch = ACCOUNT_RE.exec(text) ?? MASKED_ACCOUNT_RE.exec(text);
   const refMatch = SLASH_REF_RE.exec(text) ?? REF_RE.exec(text);
 
+  const isCcBill = CC_BILL_RE.test(text);
+  const isSelfTransfer = SELF_TRANSFER_RE.test(text);
+  const isExcluded = isCcBill || isSelfTransfer;
+  const note = isCcBill
+    ? "Credit card bill payment — excluded so expenses aren't counted twice"
+    : isSelfTransfer
+      ? 'Transfer between your own accounts'
+      : undefined;
+
   const candidate: ParsedTransaction = {
     amountPaise,
     direction,
@@ -235,6 +250,8 @@ export function parseTransactionText(
     balancePaise: balance?.value ?? null,
     occurredAt,
     source,
+    isExcluded: isExcluded ? true : undefined,
+    note,
   };
 
   const parsed = parsedTransactionSchema.safeParse(candidate);

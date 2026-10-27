@@ -1,32 +1,76 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import type { ReactNode } from 'react';
+import Animated, {
+  Easing,
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AppText } from '@/components/AppText';
+import { PaceLogo } from '@/components/brand/PaceLogo';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { getAppDb } from '@/data/appDb';
+import { setSetting } from '@/data/settingsRepo';
+import {
+  authenticateWithBiometrics,
+  checkBiometrics,
+  getBiometricCredentials,
+} from '@/services/biometrics';
 import { systemClock } from '@/services/clock';
 import { loadDemoData } from '@/services/demo';
+import { restoreFromServer } from '@/services/restore';
+import { syncNow } from '@/services/sync';
+import { useAuthStore } from '@/state/authStore';
 import { invalidateAll } from '@/state/queries';
+import { useSplash } from '@/state/splashStore';
 import { useTheme } from '@/theme/ThemeProvider';
-import { SPACE } from '@/theme/tokens';
+import { RADIUS, SPACE } from '@/theme/tokens';
 
-const POINTS: [IconName, string][] = [
-  ['calendar-outline', 'A daily budget from your salary, after rent, EMIs and savings.'],
-  ['chatbox-ellipses-outline', 'Payments added automatically from your bank SMS.'],
-  ['lock-closed-outline', 'Only bank messages are read. They never leave your phone.'],
+const VALUES: { icon: IconName; text: string }[] = [
+  { icon: 'shield-checkmark-outline', text: 'Rent, EMIs and savings are set aside first.' },
+  { icon: 'chatbox-ellipses-outline', text: 'Payments arrive on their own from your bank SMS.' },
+  {
+    icon: 'lock-closed-outline',
+    text: 'Only bank messages are read. Message text never leaves your phone.',
+  },
 ];
 
+// Example numbers for the preview card (the brief's own examples).
+const PREVIEW = { left: '₹1,279', budget: '₹1,579', usedFraction: 0.19 };
+
 export default function Welcome() {
-  const { reducedMotion } = useTheme();
+  const { colors, reducedMotion } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const client = useQueryClient();
+  const login = useAuthStore((s) => s.login);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  const enter = (delay: number) =>
-    reducedMotion ? FadeIn.duration(200) : FadeInDown.duration(400).delay(delay);
+  const [unlocking, setUnlocking] = useState(false);
+  const splashGone = useSplash((s) => s.dismissed);
+  const [introDone, setIntroDone] = useState(false);
+  const onIntroEnd = useCallback(() => setIntroDone(true), []);
+
+  const [hasBiometrics, setHasBiometrics] = useState(false);
+  const [biometryName, setBiometryName] = useState('Fingerprint');
+  const [hasSavedCreds, setHasSavedCreds] = useState(false);
+
+  useEffect(() => {
+    checkBiometrics().then(async (status) => {
+      setHasBiometrics(status.hasHardware && status.isEnrolled);
+      setBiometryName(status.biometryName);
+      const creds = await getBiometricCredentials();
+      setHasSavedCreds(creds !== null);
+    });
+  }, []);
+
+  const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
 
   const tryDemo = async () => {
     setLoadingDemo(true);
@@ -39,50 +83,239 @@ export default function Welcome() {
     }
   };
 
+  const onQuickUnlock = async () => {
+    setUnlocking(true);
+    try {
+      const authed = await authenticateWithBiometrics(`Unlock Paisa Pulse with ${biometryName}`);
+      if (!authed) return;
+
+      const creds = await getBiometricCredentials();
+      if (!creds) {
+        router.push('/settings/auth');
+        return;
+      }
+
+      await login(creds.email, creds.password);
+      const db = await getAppDb();
+      try {
+        await restoreFromServer(db);
+      } catch {
+        await syncNow(db);
+      }
+      await setSetting(db, 'onboardingComplete', true);
+      await invalidateAll(client);
+      router.replace('/(tabs)');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
   return (
     <Screen
       edges={['top', 'bottom']}
       footer={
-        <View style={styles.actions}>
-          <Button label="Get started" onPress={() => router.push('/onboarding/salary')} />
+        <Animated.View
+          entering={reducedMotion ? FadeIn.duration(200) : FadeIn.duration(400).delay(300)}
+          style={styles.actions}
+        >
+          <Button
+            label="Get started"
+            icon="arrow-forward"
+            onPress={() => router.push('/onboarding/salary')}
+            accessibilityHint="Set up your daily budget in about two minutes"
+          />
+          {hasBiometrics && hasSavedCreds ? (
+            <Button
+              label={`Quick unlock with ${biometryName}`}
+              variant="secondary"
+              icon="finger-print-outline"
+              loading={unlocking}
+              onPress={onQuickUnlock}
+              accessibilityHint={`Unlock instantly with your ${biometryName}`}
+            />
+          ) : (
+            <Button
+              label="Sign in / Sign up"
+              variant="secondary"
+              icon="person-circle-outline"
+              onPress={() => router.push('/settings/auth')}
+              accessibilityHint="Sign in to your account or create a new one"
+            />
+          )}
           <Button
             label="Explore with sample data"
             variant="ghost"
             onPress={tryDemo}
             loading={loadingDemo}
-            accessibilityHint="Fills the app with realistic example payments so you can look around"
+            accessibilityHint="Fills the app with example payments so you can look around first"
           />
-        </View>
+        </Animated.View>
       }
     >
       <View style={styles.hero}>
-        <Animated.View entering={enter(0)}>
-          <Icon name="leaf-outline" size={44} color="accentText" />
-        </Animated.View>
-        <Animated.View entering={enter(80)}>
-          <AppText variant="title" accessibilityRole="header">
-            Know what you can spend today.
-          </AppText>
-        </Animated.View>
-        <Animated.View entering={enter(160)} style={styles.points}>
-          {POINTS.map(([icon, text]) => (
-            <View key={text} style={styles.point}>
-              <Icon name={icon} color="muted" />
-              <AppText color="muted" style={styles.flex}>
-                {text}
-              </AppText>
-            </View>
-          ))}
-        </Animated.View>
+        {/* Renders statically formed so the PACE animation doesn't repeat after splash */}
+        <PaceLogo width={logoWidth} staticFormed play={splashGone} onIntroEnd={onIntroEnd} />
       </View>
+
+      <Reveal show={introDone} step={0} style={styles.headingBlock}>
+        <AppText variant="caption" color="accentText" center style={styles.eyebrow}>
+          PAISA PULSE
+        </AppText>
+        <AppText variant="title" center accessibilityRole="header" style={styles.headline}>
+          Know exactly what you can spend today.
+        </AppText>
+        <AppText color="muted" center style={styles.subtitle}>
+          Your salary, minus rent, EMIs and savings, turned into one calm daily number.
+        </AppText>
+      </Reveal>
+
+      <Reveal show={introDone} step={1}>
+        <TodayPreview animate={introDone} />
+      </Reveal>
+
+      <Reveal show={introDone} step={2} style={styles.values}>
+        {VALUES.map((v) => (
+          <View key={v.text} style={styles.valueRow}>
+            <View style={[styles.valueIcon, { backgroundColor: colors.surface }]}>
+              <Icon name={v.icon} size={18} color="accentText" />
+            </View>
+            <AppText variant="caption" color="muted" style={styles.flex}>
+              {v.text}
+            </AppText>
+          </View>
+        ))}
+      </Reveal>
     </Screen>
   );
 }
 
+/** Fades a block up once `show` turns true (after the logo has formed), staggered by `step`. */
+function Reveal({
+  show,
+  step,
+  style,
+  children,
+}: {
+  show: boolean;
+  step: number;
+  style?: object;
+  children: ReactNode;
+}) {
+  const { reducedMotion } = useTheme();
+  const p = useSharedValue(0);
+
+  useEffect(() => {
+    if (!show) return;
+    p.value = reducedMotion
+      ? withTiming(1, { duration: 200 })
+      : withDelay(
+          step * 90,
+          withTiming(1, { duration: 520, easing: Easing.bezierFn(0.16, 1, 0.3, 1) }),
+        );
+  }, [show, step, reducedMotion, p]);
+
+  const animated = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: [{ translateY: reducedMotion ? 0 : (1 - p.value) * 14 }],
+  }));
+
+  return <Animated.View style={[style, animated]}>{children}</Animated.View>;
+}
+
+/** A glimpse of the product: the one number the app is about. Its bar fills once. */
+function TodayPreview({ animate }: { animate: boolean }) {
+  const { colors, reducedMotion } = useTheme();
+  const target = 1 - PREVIEW.usedFraction;
+  const fill = useSharedValue(reducedMotion ? target : 0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      fill.value = target;
+      return;
+    }
+    if (!animate) return;
+    fill.value = withTiming(target, { duration: 700, easing: Easing.bezierFn(0.22, 1, 0.36, 1) });
+  }, [animate, reducedMotion, fill, target]);
+
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: fill.value }] }));
+
+  return (
+    <View
+      style={[styles.preview, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      accessible
+      accessibilityLabel={`Example: ${PREVIEW.left} left today of ${PREVIEW.budget}`}
+    >
+      <View style={styles.previewTop}>
+        <AppText variant="caption" color="muted">
+          Today
+        </AppText>
+        <View style={[styles.sampleTag, { borderColor: colors.border }]}>
+          <AppText variant="caption" color="muted" style={styles.sampleText}>
+            EXAMPLE
+          </AppText>
+        </View>
+      </View>
+      <View style={styles.previewNumber}>
+        <AppText variant="title" tabular style={styles.previewAmount}>
+          {PREVIEW.left}
+        </AppText>
+        <AppText color="muted" tabular>
+          left of {PREVIEW.budget}
+        </AppText>
+      </View>
+      <View style={[styles.track, { backgroundColor: colors.track }]}>
+        <Animated.View style={[styles.bar, { backgroundColor: colors.accent }, barStyle]} />
+      </View>
+      <View style={styles.previewFoot}>
+        <Icon name="leaf-outline" size={14} color="accentText" />
+        <AppText variant="caption" color="muted">
+          Within budget. Tomorrow adjusts on its own.
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  hero: { gap: SPACE.xl, paddingTop: SPACE.xxxl },
-  points: { gap: SPACE.lg },
-  point: { flexDirection: 'row', gap: SPACE.md, alignItems: 'flex-start' },
+  hero: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: SPACE.xxl,
+    paddingBottom: SPACE.lg,
+  },
+  headingBlock: { alignItems: 'center', gap: SPACE.sm },
+  eyebrow: { letterSpacing: 3, fontSize: 12 },
+  headline: { fontSize: 28, lineHeight: 36, maxWidth: 320 },
+  subtitle: { maxWidth: 320 },
+  preview: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.lg + 4,
+    gap: SPACE.md,
+    marginTop: SPACE.sm,
+  },
+  previewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sampleTag: {
+    borderWidth: 1,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 2,
+  },
+  sampleText: { fontSize: 11, letterSpacing: 1.2 },
+  previewNumber: { flexDirection: 'row', alignItems: 'baseline', gap: SPACE.sm },
+  previewAmount: { fontSize: 32, lineHeight: 40 },
+  track: { height: 6, borderRadius: RADIUS.pill, overflow: 'hidden' },
+  bar: { height: '100%', borderRadius: RADIUS.pill, transformOrigin: 'left' },
+  previewFoot: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  values: { gap: SPACE.md },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  valueIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   flex: { flex: 1 },
   actions: { gap: SPACE.sm },
 });

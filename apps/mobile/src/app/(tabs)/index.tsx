@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 
+import { AppLogo } from '@/components/AppLogo';
 import { Amount } from '@/components/Amount';
 import { AppText } from '@/components/AppText';
 import { BudgetRing } from '@/components/BudgetRing';
@@ -22,6 +23,13 @@ import { useImportStatus } from '@/state/importStatus';
 import { invalidateAll, useToday, type TodayData } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { RADIUS, SPACE } from '@/theme/tokens';
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function TodayScreen() {
   const today = useToday();
@@ -82,16 +90,23 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
   const needsReview = transactions.filter((t) => t.needsReview).length;
   const yesterday = yesterdayLine(data.yesterday);
 
+  const greeting = getGreeting();
+
   return (
     <>
       <View style={styles.header}>
-        <View>
-          <AppText variant="caption" color="muted">
-            {formatDayLabel(data.today, data.today)} · {snapshot.daysLeft}{' '}
-            {snapshot.daysLeft === 1 ? 'day' : 'days'} left in cycle
-          </AppText>
+        <View style={styles.headerTitleWrap}>
+          <View style={styles.logoRow}>
+            <AppLogo size={28} variant="mark" animated />
+            <AppText variant="caption" color="muted">
+              {greeting} · {formatDayLabel(data.today, data.today)}
+            </AppText>
+          </View>
           <AppText variant="title" accessibilityRole="header">
             Today
+          </AppText>
+          <AppText variant="caption" color="muted">
+            {snapshot.daysLeft} {snapshot.daysLeft === 1 ? 'day' : 'days'} left until next payday
           </AppText>
         </View>
         {streak > 0 ? <StreakPill days={streak} /> : null}
@@ -107,7 +122,7 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
         }
       >
         <AppText variant="caption" color={over ? 'coralText' : 'muted'}>
-          {over ? 'Over budget' : 'Left today'}
+          {over ? 'Over today by' : 'Safe to spend today'}
         </AppText>
         <Amount
           paise={Math.abs(remaining)}
@@ -116,7 +131,7 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
           animated
         />
         <AppText variant="caption" color="muted" tabular>
-          of {formatINRWhole(snapshot.todayBudgetPaise)}
+          of {formatINRWhole(snapshot.todayBudgetPaise)} daily allowance
         </AppText>
       </BudgetRing>
 
@@ -182,12 +197,12 @@ function StatusLine({
 }) {
   const text =
     budget === 0
-      ? "This cycle's spendable money is used up. Fixed costs and savings are still covered."
+      ? "This cycle's daily spendable pool is resting. Your essentials (rent, EMIs & savings) remain fully protected."
       : tone === 'over'
-        ? "You're over today's budget. Tomorrow's budget adjusts automatically."
+        ? "A little over today — and that's completely okay! Tomorrow gently recalibrates so you stay balanced."
         : tone === 'warn'
-          ? `You've used ${Math.round(usedRatio * 100)}% of today's budget.`
-          : 'You are within budget. Nice and steady.';
+          ? `You've used ${Math.round(usedRatio * 100)}% of today's allowance. Gentle, mindful spending for tonight.`
+          : 'You are right on track. Peaceful, calm, and steady.';
   return (
     <View style={styles.statusLine} accessibilityLiveRegion="polite">
       <Icon
@@ -245,8 +260,8 @@ function TodayList({ transactions }: { transactions: Transaction[] }) {
     return (
       <EmptyState
         icon="cafe-outline"
-        title="No spending yet today"
-        body="Payments from your bank SMS appear here automatically. Paid in cash? Add it below."
+        title="Your day is peaceful and clear"
+        body="No spending recorded yet today. Bank SMS and UPI payments will appear here automatically. Paid in cash? Tap the button below."
       />
     );
   }
@@ -272,7 +287,9 @@ function TodayList({ transactions }: { transactions: Transaction[] }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  headerTitleWrap: { gap: 2 },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   stats: { flexDirection: 'row', gap: SPACE.md },
   stat: { flex: 1, padding: SPACE.lg, borderRadius: RADIUS.md, gap: 2 },
   statusLine: {

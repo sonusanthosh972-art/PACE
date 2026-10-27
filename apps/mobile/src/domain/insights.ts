@@ -1,4 +1,4 @@
-import { countsAsSpend, type SpendLike } from './budget';
+import { countsAsRefund, countsAsSpend, type SpendLike } from './budget';
 import { CATEGORIES, type CategoryId } from './categories';
 import type { Paise } from './money';
 import { toDateKey, type DateKey } from './time';
@@ -95,9 +95,12 @@ export function essentialSplit(txs: readonly InsightTx[]): EssentialSplit {
 export function dailySpend(txs: readonly InsightTx[]): Map<DateKey, Paise> {
   const map = new Map<DateKey, Paise>();
   for (const tx of txs) {
-    if (!countsAsSpend(tx)) continue;
     const key = toDateKey(tx.occurredAt);
-    map.set(key, (map.get(key) ?? 0) + tx.amountPaise);
+    if (countsAsSpend(tx)) {
+      map.set(key, (map.get(key) ?? 0) + tx.amountPaise);
+    } else if (countsAsRefund(tx)) {
+      map.set(key, Math.max(0, (map.get(key) ?? 0) - tx.amountPaise));
+    }
   }
   return map;
 }

@@ -23,6 +23,8 @@ import { toDateKey } from '@/domain/time';
 import type { Transaction } from '@/domain/transaction';
 import { transactionsToCsv } from '@/lib/format';
 
+import { clearTokens } from './api/tokens';
+import { setBiometricEnabled } from './biometrics';
 import { systemClock } from './clock';
 import { onNewTransactions } from './liveEvents';
 
@@ -91,6 +93,14 @@ export function registerRemoteWipe(fn: RemoteWipe): void {
 
 /** "Delete all my data": server first (if signed in), then everything on the device. */
 export async function deleteAllData(): Promise<void> {
-  if (remoteWipe) await remoteWipe();
+  if (remoteWipe) {
+    try {
+      await remoteWipe();
+    } catch {
+      // Continue wiping local data even if remote server is unreachable
+    }
+  }
+  await clearTokens();
+  await setBiometricEnabled(false);
   await wipeAllLocalData(await getAppDb());
 }

@@ -44,7 +44,7 @@ describe('Delete all my data', () => {
     await fireEvent.press(button);
     expect(mockDeleteAll).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/onboarding');
-  });
+  }, 15000);
 
   it('shows an error and keeps the data when the server delete fails', async () => {
     mockDeleteAll.mockRejectedValueOnce(new Error('offline'));

@@ -220,9 +220,9 @@ export async function ingestParsed(
     merchantNorm,
     category,
     needsReview,
-    note: null,
+    note: parsed.note ?? null,
     dedupeHash,
-    isExcluded: false,
+    isExcluded: parsed.isExcluded ?? false,
     createdAt: now,
     updatedAt: now,
   });

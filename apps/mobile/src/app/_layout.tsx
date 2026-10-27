@@ -1,9 +1,7 @@
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  useFonts,
-} from '@expo-google-fonts/inter';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -14,7 +12,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DeviceSync } from '@/components/DeviceSync';
+import { SplashScreenView } from '@/components/SplashScreenView';
 import { ErrorState } from '@/components/States';
+import { useSplash } from '@/state/splashStore';
 import { useSettings } from '@/state/queries';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { MOTION } from '@/theme/tokens';
@@ -45,12 +45,13 @@ export default function RootLayout() {
 function AppShell({ fontsReady }: { fontsReady: boolean }) {
   const settings = useSettings();
   const ready = fontsReady && !settings.isPending;
+  const splashDismissed = useSplash((s) => s.dismissed);
+  const dismissSplash = useSplash((s) => s.dismiss);
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
-
-  if (!ready) return null; // splash screen stays up
+    // Hide OS native splash as soon as React mounts and our branded splash is rendered
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
 
   return (
     <ThemeProvider preference={settings.data?.theme ?? 'system'}>
@@ -62,6 +63,7 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
           <ThemedStack />
         </>
       )}
+      {!splashDismissed && <SplashScreenView ready={ready} onFinish={dismissSplash} />}
     </ThemeProvider>
   );
 }
@@ -130,6 +132,10 @@ function ThemedStack() {
         <Stack.Screen
           name="settings/notifications"
           options={{ headerShown: true, title: 'Notifications' }}
+        />
+        <Stack.Screen
+          name="settings/auth"
+          options={{ headerShown: true, title: 'Account & Backup' }}
         />
         <Stack.Screen
           name="settings/delete-data"

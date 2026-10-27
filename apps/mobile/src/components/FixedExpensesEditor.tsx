@@ -14,15 +14,19 @@ import { MoneyField, TextField } from './Fields';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
 
+import type { DetectedSubscription } from '@/domain/subscriptions';
+
 const SUGGESTIONS = ['Rent', 'Home loan EMI', 'Car EMI', 'Insurance', 'SIP', 'Phone + internet'];
 
 /** Add/remove fixed monthly costs (rent, EMIs, SIPs…). Pure UI over a list in props. */
 export function FixedExpensesEditor({
   items,
   onChange,
+  suggestedSubscriptions,
 }: {
   items: readonly FixedExpenseInput[];
   onChange: (items: FixedExpenseInput[]) => void;
+  suggestedSubscriptions?: readonly DetectedSubscription[];
 }) {
   const { colors } = useTheme();
   const [name, setName] = useState('');
@@ -40,6 +44,10 @@ export function FixedExpensesEditor({
     setError(null);
     setFormKey((k) => k + 1); // resets the money field
   };
+
+  const unaddedSubscriptions = (suggestedSubscriptions ?? []).filter(
+    (sub) => !items.some((i) => i.name.toLowerCase() === sub.name.toLowerCase()),
+  );
 
   return (
     <View style={styles.wrap}>
@@ -69,6 +77,40 @@ export function FixedExpensesEditor({
           </PressableScale>
         </View>
       ))}
+
+      {unaddedSubscriptions.length > 0 ? (
+        <View style={[styles.detectedSection, { borderColor: colors.border }]}>
+          <View style={styles.detectedHeader}>
+            <Icon name="sparkles" size={16} color="accentText" />
+            <AppText variant="caption" color="accentText">
+              Detected recurring subscriptions & AutoPay
+            </AppText>
+          </View>
+          <View style={styles.suggestions}>
+            {unaddedSubscriptions.map((sub) => (
+              <PressableScale
+                key={sub.name}
+                onPress={() =>
+                  onChange([
+                    ...items,
+                    { name: sub.name, amountPaise: sub.amountPaise, dueDay: sub.dueDay },
+                  ])
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Add detected subscription ${sub.name}, ${formatINRWhole(sub.amountPaise)}`}
+                style={[
+                  styles.detectedChip,
+                  { borderColor: colors.accent, backgroundColor: colors.surface },
+                ]}
+              >
+                <AppText variant="caption" color="text">
+                  + {sub.name} ({formatINRWhole(sub.amountPaise)})
+                </AppText>
+              </PressableScale>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <View style={[styles.form, { borderColor: colors.border }]}>
         <AppText variant="heading">Add a fixed cost</AppText>
@@ -127,6 +169,24 @@ const styles = StyleSheet.create({
   },
   suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
   suggestion: {
+    minHeight: 36,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+  detectedSection: {
+    gap: SPACE.sm,
+    padding: SPACE.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+  },
+  detectedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.xs,
+  },
+  detectedChip: {
     minHeight: 36,
     paddingHorizontal: SPACE.md,
     borderRadius: RADIUS.pill,

@@ -1,0 +1,48 @@
+# Render Blueprint Spec (Infrastructure as Code)
+# Docs: https://render.com/docs/blueprint-spec
+
+version: "1"
+
+services:
+  # =========================================================================
+  # 1. Paisa Pulse Backend (.NET 10 API)
+  # =========================================================================
+  - type: web
+    name: paisapulse-api
+    runtime: docker
+    rootDir: apps/api
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon # or frankfurt, singapore, ohio
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: MONGODB_URI
+        sync: false # Enter your MongoDB Atlas connection string in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render auto-generates a secure 32+ char cryptographic secret
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://*.onrender.com,http://localhost:3000,http://localhost:8081
+
+  # =========================================================================
+  # 2. Paisa Pulse Admin Dashboard (Next.js 16)
+  # =========================================================================
+  - type: web
+    name: paisapulse-admin
+    runtime: node
+    rootDir: apps/admin
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: paisapulse-api
+          property: host

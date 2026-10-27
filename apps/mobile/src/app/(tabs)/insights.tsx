@@ -22,9 +22,14 @@ export default function InsightsScreen() {
 
   return (
     <Screen>
-      <AppText variant="title" accessibilityRole="header">
-        Where did my money go?
-      </AppText>
+      <View style={styles.screenHeader}>
+        <AppText variant="title" accessibilityRole="header">
+          Your Money Story
+        </AppText>
+        <AppText variant="caption" color="muted">
+          Where your money went this cycle — honest, clear, and judgment-free.
+        </AppText>
+      </View>
       {insights.isPending ? (
         <LoadingState label="Loading insights" />
       ) : insights.isError ? (
@@ -32,9 +37,9 @@ export default function InsightsScreen() {
       ) : !insights.data || !insights.data.hasData ? (
         <EmptyState
           icon="pie-chart-outline"
-          title="Nothing to show yet"
-          body="Once a few payments come in this cycle, you'll see where the money goes."
-          actionLabel="Add a cash spend"
+          title="Your story begins with your first payment"
+          body="As your everyday payments arrive via bank SMS or UPI, Paisa Pulse gently organizes them into clear patterns. No spreadsheets, no guilt."
+          actionLabel="Record cash spending"
           onAction={() => router.push('/add')}
         />
       ) : (
@@ -124,12 +129,15 @@ function InsightsContent({
 
       <Card>
         <View style={styles.row}>
-          <Icon name="water-outline" color="amberText" />
+          <Icon name="sparkles-outline" color="amberText" />
           <AppText variant="heading" accessibilityRole="header">
-            Small leaks
+            Everyday comforts (under ₹500)
           </AppText>
         </View>
-        <AppText color="muted">Payments under ₹500 this cycle</AppText>
+        <AppText color="muted">
+          Chai, auto rides, snacks, quick treats. They add flavor to daily life — seeing the total
+          helps you stay mindful.
+        </AppText>
         <View style={styles.row}>
           <Amount paise={data.leaks.totalPaise} variant="title" animated />
           <AppText color="muted" tabular>
@@ -138,16 +146,16 @@ function InsightsContent({
         </View>
         {data.leaks.count > 0 ? (
           <AppText variant="caption" color="muted">
-            About{' '}
+            Averages about{' '}
             {formatINRWhole(Math.round(data.leaks.totalPaise / Math.max(1, data.days.length)))} a
-            day in small amounts.
+            day in small everyday comforts.
           </AppText>
         ) : null}
       </Card>
 
       <Card>
         <AppText variant="heading" accessibilityRole="header">
-          Top merchants
+          Places you visited most
         </AppText>
         {data.merchants.map((m, i) => (
           <View
@@ -176,7 +184,11 @@ function InsightsContent({
 
       <Card>
         <AppText variant="heading" accessibilityRole="header">
-          Essentials vs extras
+          Essentials vs life&apos;s extras
+        </AppText>
+        <AppText variant="caption" color="muted">
+          Essentials sustain your family and life. Extras bring joy. Finding harmony between both
+          creates lasting calm.
         </AppText>
         <View
           style={[styles.splitBar, { backgroundColor: colors.track }]}
@@ -214,6 +226,7 @@ function InsightsContent({
 }
 
 const styles = StyleSheet.create({
+  screenHeader: { gap: 4, marginBottom: SPACE.xs },
   donutRow: { alignItems: 'center', paddingVertical: SPACE.sm },
   legend: { gap: SPACE.sm },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, minHeight: 32 },

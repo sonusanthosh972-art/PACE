@@ -8,8 +8,18 @@ package com.paisapulse.smsreader
  */
 object BankSenders {
   private val HEADERS = listOf(
-    "HDFCBK", "ICICIB", "SBIINB", "SBIUPI", "ATMSBI", "CBSSBI", "SBICRD",
+    "HDFCBK", "ICICIB", "SBIINB", "SBIUPI", "ATMSBI", "CBSSBI", "SBICRD", "SBICARD",
     "AXISBK", "KOTAKB", "PAYTMB", "IDFCFB", "YESBNK",
+    "BOBTXN", "BARBOD", "BOBSMS",
+    "PNBSMS", "PNBTXN",
+    "CANBNK", "CNRBANK",
+    "UNIONB", "UBINBK",
+    "INDUSB", "INDBNK",
+    "AUBANK", "AUSFBK",
+    "FEDBNK", "FDRLBK",
+    "RBLBNK", "RBLCRD",
+    "IDBIBK", "IDBINS",
+    "AMEXIN", "ONECRD", "FIBANK", "JUPITR", "SLICEC",
   )
 
   /** e.g. VM-HDFCBK, AD-SBIUPI, JD-ICICIB-S */
@@ -20,6 +30,11 @@ object BankSenders {
     "com.google.android.apps.nbu.paisa.user", // Google Pay
     "com.phonepe.app",
     "net.one97.paytm",
+    "in.org.npci.upiapp",
+    "co.finside.android",
+    "money.jupiter",
+    "com.slice",
+    "com.onecard.app",
     "com.snapwork.hdfc",
     "com.csam.icici.bank.imobile",
     "com.sbi.lotusintouch",
@@ -28,6 +43,9 @@ object BankSenders {
     "com.msf.kbank.mobile",
     "com.idfcfirstbank.optimus",
     "com.YesBank",
+    "com.bankofbaroda.mconnect",
+    "com.fss.pnb",
+    "com.canarabank.mobility",
   )
 
   fun isBankSender(sender: String?): Boolean =

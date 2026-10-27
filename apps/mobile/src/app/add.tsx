@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -46,10 +46,22 @@ export default function AddSheet() {
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <AppText variant="title" accessibilityRole="header">
-        Add cash spend
-      </AppText>
-      <MoneyField label="Amount" valuePaise={amount} onChangePaise={setAmount} large autoFocus />
+      <View style={styles.sheetHeader}>
+        <AppText variant="title" accessibilityRole="header">
+          Record cash payment
+        </AppText>
+        <AppText variant="caption" color="muted">
+          Paid in cash for chai, auto, groceries, or tips? Record it here to keep your daily
+          allowance perfectly accurate.
+        </AppText>
+      </View>
+      <MoneyField
+        label="Amount paid"
+        valuePaise={amount}
+        onChangePaise={setAmount}
+        large
+        autoFocus
+      />
       <AppText variant="label">Category</AppText>
       <CategoryGrid selected={category} onSelect={setCategory} />
       <TextField
@@ -71,4 +83,5 @@ export default function AddSheet() {
 
 const styles = StyleSheet.create({
   content: { padding: SPACE.xl, gap: SPACE.lg, paddingBottom: SPACE.xxxl },
+  sheetHeader: { gap: 4 },
 });

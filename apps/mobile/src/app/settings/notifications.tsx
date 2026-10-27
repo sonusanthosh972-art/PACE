@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
 import type { Settings, TimeOfDay } from '@/data/settingsRepo';
 import { formatTimeOfDay, shiftTime } from '@/lib/format';
+import { rescheduleAll } from '@/services/notifications';
 import { updateSetting } from '@/services/actions';
 import { invalidateAll, useSettings } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -53,6 +54,7 @@ export default function NotificationSettings() {
   const set = async <K extends keyof Settings>(key: K, value: Settings[K]) => {
     await updateSetting(key, value);
     await invalidateAll(client);
+    await rescheduleAll().catch(() => undefined);
   };
 
   return (

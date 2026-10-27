@@ -133,14 +133,23 @@ describe('spend rules', () => {
     expect(countsAsSpend({ ...base, category: 'rent_emi' })).toBe(false);
   });
 
-  it('totals spend in paise', () => {
+  it('totals spend in paise with refunds netted', () => {
     expect(
       totalSpend([
         { ...base, category: 'food' },
         { ...base, amountPaise: 2550, category: 'coffee' },
         { ...base, category: 'rent_emi' },
+        { ...base, amountPaise: 500, direction: 'credit', category: 'food' }, // ₹5 refund
       ]),
-    ).toBe(3550);
+    ).toBe(3050);
+
+    // Total spend cannot go below zero even if refunds exceed debits
+    expect(
+      totalSpend([
+        { ...base, amountPaise: 1000, category: 'food' },
+        { ...base, amountPaise: 2000, direction: 'credit', category: 'food' },
+      ]),
+    ).toBe(0);
   });
 
   it('remainingToday can go negative', () => {

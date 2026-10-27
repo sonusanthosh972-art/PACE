@@ -7,15 +7,16 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#16171A",
+    "backgroundColor": "#0B0D11",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.paisapulse.app"
     },
     "android": {
       "package": "com.paisapulse.app",
+      "permissions": ["android.permission.USE_BIOMETRIC", "android.permission.USE_FINGERPRINT"],
       "adaptiveIcon": {
-        "backgroundColor": "#16171A",
+        "backgroundColor": "#0B0D11",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -27,10 +28,20 @@
       "expo-font",
       "expo-sqlite",
       "expo-secure-store",
+      "expo-local-authentication",
       "expo-sharing",
       "expo-localization",
       "expo-build-properties",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0D11",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

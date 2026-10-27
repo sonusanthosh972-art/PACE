@@ -39,6 +39,13 @@ Log.Logger = new LoggerConfiguration()
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
+var port = Environment.GetEnvironmentVariable("PORT");
+var defaultUrl = string.IsNullOrWhiteSpace(port) ? "http://0.0.0.0:5080" : $"http://0.0.0.0:{port}";
+var serverUrls = builder.Configuration["ASPNETCORE_URLS"]
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS")
+    ?? defaultUrl;
+builder.WebHost.UseUrls(serverUrls);
+
 // Environment variables win; user-secrets (Development only) are the fallback.
 ApiSettings settings;
 try

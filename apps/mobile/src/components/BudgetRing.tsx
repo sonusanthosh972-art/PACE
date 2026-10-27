@@ -41,11 +41,11 @@ export function BudgetRing({
   }, [target, reducedMotion, progress]);
 
   const path = useMemo(() => {
-    const p = Skia.Path.Make();
     const inset = strokeWidth / 2 + 1;
     // Start at 12 o'clock and sweep clockwise.
-    p.addArc({ x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 }, -90, 359.9);
-    return p;
+    return Skia.PathBuilder.Make()
+      .addArc({ x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 }, -90, 359.9)
+      .detach();
   }, [size, strokeWidth]);
 
   const color = tone === 'over' ? colors.coral : tone === 'warn' ? colors.amber : colors.accent;

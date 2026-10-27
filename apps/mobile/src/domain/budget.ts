@@ -84,8 +84,28 @@ export function countsAsSpend(tx: SpendLike): boolean {
   return tx.direction === 'debit' && !tx.isExcluded && !CATEGORIES[tx.category].isFixed;
 }
 
+/**
+ * Valid refund/reversal credits that net against spending (e.g. Amazon refund).
+ * Does not include transfers to people, other general income/deposits, or fixed expenses.
+ */
+export function countsAsRefund(tx: SpendLike): boolean {
+  return (
+    tx.direction === 'credit' &&
+    !tx.isExcluded &&
+    tx.category !== 'other' &&
+    tx.category !== 'transfers' &&
+    !CATEGORIES[tx.category]?.isFixed
+  );
+}
+
 export function totalSpend(txs: readonly SpendLike[]): Paise {
-  return sumPaise(txs.filter(countsAsSpend).map((t) => t.amountPaise));
+  let debits = 0;
+  let refunds = 0;
+  for (const t of txs) {
+    if (countsAsSpend(t)) debits += t.amountPaise;
+    else if (countsAsRefund(t)) refunds += t.amountPaise;
+  }
+  return Math.max(0, debits - refunds);
 }
 
 /** todayBudget = max(0, (spendable − spentBeforeToday) ÷ daysLeft), rounded to the paisa. */

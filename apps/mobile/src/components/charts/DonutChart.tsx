@@ -1,4 +1,4 @@
-import { Canvas, Path, Skia } from '@shopify/react-native-skia';
+import { Canvas, Path, Skia, type SkPath } from '@shopify/react-native-skia';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
@@ -39,14 +39,14 @@ export function DonutChart({
     const inset = stroke / 2 + 1;
     const rect = { x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 };
     const visible = slices.filter((s) => s.totalPaise > 0);
-    const result: { key: CategoryId; path: ReturnType<typeof Skia.Path.Make>; color: string }[] =
-      [];
+    const result: { key: CategoryId; path: SkPath; color: string }[] = [];
     for (let i = 0, angle = -90; i < visible.length; i += 1) {
       const s = visible[i];
       if (!s) continue;
       const sweep = totalPaise > 0 ? (s.totalPaise / totalPaise) * 360 : 0;
-      const path = Skia.Path.Make();
-      path.addArc(rect, angle + GAP_DEG / 2, Math.max(0.5, sweep - GAP_DEG));
+      const path = Skia.PathBuilder.Make()
+        .addArc(rect, angle + GAP_DEG / 2, Math.max(0.5, sweep - GAP_DEG))
+        .detach();
       angle += sweep;
       result.push({ key: s.category, path, color: colors.categories[s.category] });
     }

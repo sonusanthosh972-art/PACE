@@ -30,6 +30,8 @@ export const parsedTransactionSchema = z.object({
   balancePaise: paise.nullable(),
   occurredAt: z.number().int().positive(),
   source: z.enum(SOURCES),
+  isExcluded: z.boolean().optional(),
+  note: z.string().max(280).nullable().optional(),
 });
 
 export type ParsedTransaction = z.infer<typeof parsedTransactionSchema>;

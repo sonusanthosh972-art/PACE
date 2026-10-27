@@ -5,7 +5,9 @@ import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import * as SmsReader from '../../../modules/sms-reader';
 
+import { AppLogo } from '@/components/AppLogo';
 import { AppText } from '@/components/AppText';
+import { Card } from '@/components/Card';
 import { ListRow, SectionTitle, Segmented } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -13,6 +15,13 @@ import type { Settings } from '@/data/settingsRepo';
 import { formatINRWhole, sumPaise } from '@/domain/money';
 import { formatTimeOfDay, ordinal } from '@/lib/format';
 import { exportCsv, updateSetting } from '@/services/actions';
+import {
+  authenticateWithBiometrics,
+  checkBiometrics,
+  isBiometricEnabled,
+  setBiometricEnabled,
+} from '@/services/biometrics';
+import { useAuthStore, type SyncState } from '@/state/authStore';
 import { invalidateAll, useProfile, useSettings } from '@/state/queries';
 import { SPACE } from '@/theme/tokens';
 
@@ -22,11 +31,61 @@ const THEMES: { value: Settings['theme']; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ];
 
+function formatBackupStatus(
+  status: SyncState,
+  lastSyncedAt: number | null,
+  nextRetrySecs: number | null,
+): string {
+  if (status === 'syncing') return 'Syncing…';
+  if (status === 'offline') return 'Waiting for internet';
+  if (status === 'retrying') {
+    return nextRetrySecs
+      ? `Couldn't reach server, retrying in ${nextRetrySecs}s`
+      : "Couldn't reach server, retrying";
+  }
+  if (!lastSyncedAt) return 'Never backed up';
+
+  const diffMs = Date.now() - lastSyncedAt;
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return 'Backed up just now';
+  if (diffMins === 1) return 'Backed up 1 min ago';
+  if (diffMins < 60) return `Backed up ${diffMins} min ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours === 1) return 'Backed up 1 hour ago';
+  return `Backed up ${diffHours} hours ago`;
+}
+
 export default function SettingsScreen() {
   const settings = useSettings();
   const profile = useProfile();
   const client = useQueryClient();
   const [exporting, setExporting] = useState(false);
+  const { user, isAuthenticated, syncStatus, lastSyncedAt, nextRetrySeconds } = useAuthStore();
+
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioName, setBioName] = useState('Fingerprint');
+
+  const onToggleBiometrics = async () => {
+    if (!bioEnabled) {
+      const ok = await authenticateWithBiometrics(`Enable ${bioName} unlock`);
+      if (ok) {
+        await setBiometricEnabled(true);
+        setBioEnabled(true);
+      }
+    } else {
+      await setBiometricEnabled(false);
+      setBioEnabled(false);
+    }
+  };
+
+  useState(() => {
+    checkBiometrics().then(async (status) => {
+      setBioAvailable(status.hasHardware && status.isEnrolled);
+      setBioName(status.biometryName);
+      setBioEnabled(await isBiometricEnabled());
+    });
+  });
 
   if (settings.isPending || profile.isPending) {
     return (
@@ -141,6 +200,34 @@ export default function SettingsScreen() {
         />
       </View>
 
+      <SectionTitle>Account & Backup</SectionTitle>
+      <View style={styles.group}>
+        <ListRow
+          icon={isAuthenticated ? 'cloud-done-outline' : 'person-circle-outline'}
+          title={
+            isAuthenticated
+              ? user?.name || user?.email || 'Cloud backup'
+              : 'Sign in / Create account'
+          }
+          subtitle={
+            isAuthenticated
+              ? formatBackupStatus(syncStatus, lastSyncedAt, nextRetrySeconds)
+              : 'Sign in to mirror or restore with your private server'
+          }
+          value={isAuthenticated ? 'On' : 'Off'}
+          onPress={() => router.push('/settings/auth')}
+        />
+        {bioAvailable ? (
+          <ListRow
+            icon="finger-print-outline"
+            title={`${bioName} unlock`}
+            subtitle={bioEnabled ? 'Quick sign-in and app unlock active' : 'Disabled'}
+            value={bioEnabled ? 'On' : 'Off'}
+            onPress={onToggleBiometrics}
+          />
+        ) : null}
+      </View>
+
       <SectionTitle>Your data</SectionTitle>
       <View style={styles.group}>
         <ListRow
@@ -158,8 +245,26 @@ export default function SettingsScreen() {
         />
       </View>
 
+      <SectionTitle>About</SectionTitle>
+      <Card style={styles.aboutCard}>
+        <View style={styles.aboutRow}>
+          <AppLogo size={40} variant="mark" animated />
+          <View style={styles.aboutText}>
+            <AppText variant="bodyStrong">Paisa Pulse</AppText>
+            <AppText variant="caption" color="accentText">
+              Powered by PACE Engine · v1.0
+            </AppText>
+          </View>
+        </View>
+        <AppText variant="caption" color="muted">
+          Crafted to give every person clarity, dignity, and peace of mind over their everyday
+          finances.
+        </AppText>
+      </Card>
+
       <AppText variant="caption" color="muted" center style={styles.footer}>
-        Raw SMS never leave your phone. Only parsed amounts and merchants are stored.
+        Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to your
+        server.
         {s.demoMode ? '\nSample data mode is on.' : ''}
       </AppText>
     </Screen>
@@ -168,5 +273,8 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   group: { gap: SPACE.sm },
-  footer: { marginTop: SPACE.xl },
+  aboutCard: { padding: SPACE.md + 4, gap: SPACE.sm },
+  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  aboutText: { gap: 2 },
+  footer: { marginTop: SPACE.lg },
 });

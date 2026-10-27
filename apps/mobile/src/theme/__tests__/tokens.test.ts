@@ -30,6 +30,16 @@ describe.each(SCHEMES)('%s palette', (scheme) => {
   });
 });
 
+describe('brand & splash colours', () => {
+  it('splash platinum off-white on carbon background has ≥ 4.5:1 contrast', () => {
+    expect(contrastRatio('#F8F9FA', '#0B0D11')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('splash emerald on carbon background has ≥ 4.5:1 contrast', () => {
+    expect(contrastRatio('#10E896', '#0B0D11')).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 it('uses the specified base colours', () => {
   expect(PALETTES.dark).toMatchObject({
     bg: '#16171A',

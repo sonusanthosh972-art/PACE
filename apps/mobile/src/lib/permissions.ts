@@ -11,34 +11,36 @@ export const PERMISSION_COPY: Record<
   { title: string; why: string; points: string[]; cta: string; icon: string }
 > = {
   sms: {
-    title: 'Read bank SMS',
-    why: 'We only read messages from banks. Personal chats are never read and never leave your phone.',
+    title: 'Automatic bank SMS updates',
+    why: 'Paisa Pulse updates your daily allowance effortlessly by recognizing bank transaction alerts. Personal chats and family messages are completely ignored, and bank OTP messages are discarded immediately.',
     points: [
-      'Only senders like VM-HDFCBK or AD-SBIUPI are looked at. Everything else is skipped before it is opened.',
-      'We take the amount, merchant and account ending. The message text itself is never stored or uploaded.',
-      'We import the last 90 days once, so you see real numbers straight away.',
+      'Strict bank-sender filter: Only verified institutions (e.g. HDFC, SBI, ICICI, Axis) are processed.',
+      'Only the spent amount and merchant are stored. SMS body texts are discarded immediately.',
+      'On-device SMS processing: Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to your server.',
     ],
-    cta: 'Allow SMS access',
+    cta: 'Enable automatic bank updates',
     icon: 'chatbox-ellipses-outline',
   },
   notifications: {
-    title: 'Budget reminders',
-    why: 'A calm morning budget, a heads-up when you reach 80% and 100%, and a short night summary.',
+    title: 'Mindful budget reminders',
+    why: 'A gentle morning check-in to begin your day with clarity, a quiet heads-up if you near your allowance, and a reassuring evening summary.',
     points: [
-      'Scheduled on your phone, so they work offline.',
-      'Change the times or turn them off any time in Settings.',
+      'Quiet and respectful: No spam, no marketing offers, and no intrusive popups.',
+      'Completely offline: Reminders are generated directly on your device.',
+      'Adjust times or pause them whenever you wish in Settings.',
     ],
-    cta: 'Allow notifications',
+    cta: 'Allow mindful reminders',
     icon: 'notifications-outline',
   },
   'notification-access': {
-    title: 'Payment app alerts (optional)',
-    why: 'A backup for when a bank SMS is late or missing: we read payment notifications from GPay, PhonePe, Paytm and bank apps only.',
+    title: 'Payment app sync (Optional)',
+    why: 'A helpful backup when bank SMS is delayed: captures payments from Google Pay, PhonePe, Paytm, or BHIM instantly as you tap and pay.',
     points: [
-      'Notifications from any other app are ignored without being read.',
-      'Android opens a settings page: turn on “Paisa Pulse payment alerts”, then come back.',
+      'Only payment receipts from financial apps are processed.',
+      'Messages from WhatsApp, social media, and personal chats are completely ignored.',
+      'You can turn this off anytime in your phone settings.',
     ],
-    cta: 'Open notification access',
+    cta: 'Connect payment apps',
     icon: 'notifications-circle-outline',
   },
 };

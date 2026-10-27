@@ -78,12 +78,17 @@ export default function TransactionsScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={styles.top}>
-        <AppText variant="title" accessibilityRole="header">
-          Transactions
-        </AppText>
+        <View style={styles.headerTitleWrap}>
+          <AppText variant="title" accessibilityRole="header">
+            Transactions
+          </AppText>
+          <AppText variant="caption" color="muted">
+            All your payments, organized automatically. Swipe any row to tag or exclude.
+          </AppText>
+        </View>
         <TextField
           label="Search"
-          placeholder="Merchant or note"
+          placeholder="Search by merchant or note"
           value={search}
           onChangeText={setSearch}
           returnKeyType="search"
@@ -142,11 +147,11 @@ export default function TransactionsScreen() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={filtersActive ? 'search-outline' : 'receipt-outline'}
-          title={filtersActive ? 'No matches' : 'No transactions yet'}
+          title={filtersActive ? 'No matching payments found' : 'Your spending history is clear'}
           body={
             filtersActive
-              ? 'Try a different search or clear the filters.'
-              : 'Bank SMS payments will appear here as they arrive.'
+              ? 'Try adjusting your search terms or reset the filters to see all payments.'
+              : 'Payments from bank SMS alerts and UPI will appear here automatically. Paid in cash? Add it in seconds.'
           }
           actionLabel={filtersActive ? 'Clear filters' : undefined}
           onAction={
@@ -255,6 +260,7 @@ function SwipeRow({ tx }: { tx: Transaction }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   top: { paddingHorizontal: SPACE.xl, paddingTop: SPACE.lg, gap: SPACE.md },
+  headerTitleWrap: { gap: 2 },
   chips: { gap: SPACE.sm, paddingRight: SPACE.xl, alignItems: 'center' },
   divider: { width: StyleSheet.hairlineWidth, height: 28, marginHorizontal: SPACE.xs },
   pad: { paddingHorizontal: SPACE.xl },
