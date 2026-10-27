@@ -20,11 +20,12 @@ export interface RateLimits {
 export const DEFAULT_RATE_LIMITS: RateLimits = { authPerMinute: 10, apiPerMinute: 100 };
 
 export function createApp(
-  config: Pick<ApiConfig, 'corsOrigins' | 'adminApiKey'>,
+  config: Pick<ApiConfig, 'corsOrigins' | 'adminApiKey'> & Partial<Pick<ApiConfig, 'trustProxyHops'>>,
   limits: RateLimits = DEFAULT_RATE_LIMITS,
 ) {
   const app = express();
   app.disable('x-powered-by');
+  if (config.trustProxyHops) app.set('trust proxy', config.trustProxyHops);
   app.use(express.json({ limit: '2mb' }));
 
   // The phone app and the admin server call the API directly, so CORS stays off unless

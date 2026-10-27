@@ -29,6 +29,9 @@ export function getApiBaseUrl(): string {
   return 'http://localhost:5080';
 }
 
+/** A sleeping free-tier server (e.g. Render) can take up to a minute to wake up. */
+const CONNECTION_TEST_TIMEOUT_MS = 60_000;
+
 /**
  * Pings the server health endpoint to verify connectivity from device to server.
  */
@@ -38,7 +41,7 @@ export async function testConnection(testUrl?: string): Promise<{ ok: boolean; s
     const res = await fetch(`${base}/health`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS),
     });
     if (res.ok) {
       return { ok: true, status: 'Connected to server' };
@@ -47,7 +50,7 @@ export async function testConnection(testUrl?: string): Promise<{ ok: boolean; s
   } catch {
     return {
       ok: false,
-      status: 'Could not reach server. Check Wi-Fi IP/port or run adb reverse for USB.',
+      status: 'Could not reach the server. Check the address and your internet connection.',
     };
   }
 }

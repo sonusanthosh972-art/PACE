@@ -267,12 +267,12 @@ export default function AuthScreen() {
     <Card style={styles.serverCard}>
       <AppText variant="bodyStrong">Server Address</AppText>
       <AppText variant="caption" color="muted">
-        Connect via Wi-Fi with your Mac&apos;s IP (e.g. http://192.168.1.15:5080) or over USB using
-        adb reverse (http://localhost:5080).
+        Already set to the Paisa Pulse server. Change it only if you run your own server (for local
+        development: http://&lt;computer-ip&gt;:5080).
       </AppText>
       <TextField
         label="Server URL"
-        placeholder="http://192.168.1.15:5080"
+        placeholder="https://your-server.example.com"
         value={serverAddress}
         onChangeText={setServerAddress}
         autoCapitalize="none"

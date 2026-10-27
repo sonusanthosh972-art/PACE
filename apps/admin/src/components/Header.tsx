@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import type { TabType } from '../lib/types';
 import {
   Menu,
@@ -8,6 +9,7 @@ import {
   RefreshCw,
   Download,
   Terminal,
+  LogOut,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -68,6 +70,7 @@ export function Header({
   searchQuery,
   onSearchChange,
 }: HeaderProps) {
+  const router = useRouter();
   const current = TAB_TITLES[activeTab] || { title: 'Admin Console', subtitle: 'Paisa Pulse' };
 
   return (
@@ -160,6 +163,18 @@ export function Header({
           title="Export current table to CSV"
         >
           <Download size={14} />
+        </button>
+
+        <button
+          onClick={async () => {
+            await fetch('/api/logout', { method: 'POST' }).catch(() => undefined);
+            router.replace('/login');
+          }}
+          className="btn btn-secondary btn-sm"
+          title="Sign out"
+          aria-label="Sign out"
+        >
+          <LogOut size={14} />
         </button>
 
         {/* User Pill */}

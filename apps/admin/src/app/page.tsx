@@ -85,7 +85,8 @@ export default function AdminPage() {
 
   const [dataSource, setDataSource] = useState<'loading' | 'live' | 'offline'>('loading');
   const [dataError, setDataError] = useState<string | null>(null);
-  const [loadedAt, setLoadedAt] = useState(() => Date.now());
+  // Set when data arrives (not during render, so the page can be prerendered).
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
 
   // Modals (read-only details)
   const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
@@ -163,6 +164,7 @@ export default function AdminPage() {
     const IST_OFFSET_MS = 330 * 60 * 1000;
     const DAY_MS = 86_400_000;
     const dayIndex = (ms: number) => Math.floor((ms + IST_OFFSET_MS) / DAY_MS);
+    if (loadedAt === null) return [];
     const lastDay = dayIndex(loadedAt);
     const points = Array.from({ length: 7 }, (_, i) => {
       const idx = lastDay - 6 + i;

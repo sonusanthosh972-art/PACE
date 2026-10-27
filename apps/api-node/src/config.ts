@@ -8,6 +8,8 @@ export interface ApiConfig {
   corsOrigins: string[];
   /** Shared secret the admin dashboard sends as x-admin-key. Unset = admin endpoints disabled. */
   adminApiKey: string | null;
+  /** Number of reverse proxies in front of the API (Render = 1), so rate limits see real client IPs. */
+  trustProxyHops: number;
 }
 
 export const DEFAULT_DATABASE_NAME = 'paisapulse';
@@ -38,6 +40,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     throw new Error('PORT must be a valid TCP port number.');
   }
 
+  const trustProxyHops = Number(env.TRUST_PROXY_HOPS ?? 0);
+  if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
+    throw new Error('TRUST_PROXY_HOPS must be a non-negative integer.');
+  }
+
   return {
     mongoUri,
     databaseName: env.MONGODB_DATABASE?.trim() || DEFAULT_DATABASE_NAME,
@@ -49,5 +56,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       .map((o) => o.trim())
       .filter((o) => o.length > 0 && o !== '*'),
     adminApiKey,
+    trustProxyHops,
   };
 }

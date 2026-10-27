@@ -1,4 +1,7 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+
+import { isValidSession, SESSION_COOKIE } from './session';
 
 /** Base URL of apps/api-node. Server-side only: the browser never talks to the API directly. */
 export const API_URL = (process.env.API_URL || 'http://localhost:5080').replace(/\/+$/, '');
@@ -8,6 +11,10 @@ export const API_URL = (process.env.API_URL || 'http://localhost:5080').replace(
  * The key lives only in the Next.js server environment (apps/admin/.env.local).
  */
 export async function proxyAdmin(path: string): Promise<NextResponse> {
+  // Checked here as well as in proxy.ts, so a matcher change can never expose data.
+  if (!isValidSession((await cookies()).get(SESSION_COOKIE)?.value)) {
+    return NextResponse.json({ status: 401, title: 'Sign in required' }, { status: 401 });
+  }
   const key = process.env.ADMIN_API_KEY;
   if (!key) {
     return NextResponse.json(
