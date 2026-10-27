@@ -9,6 +9,7 @@ import { authRouter } from './routes/auth.js';
 import { meRouter } from './routes/me.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { insightsRouter } from './routes/insights.js';
+import { adminRouter } from './routes/admin.js';
 import { startDailySummaryCron } from './jobs/dailySummary.js';
 
 const app = express();
@@ -88,6 +89,7 @@ app.use('/api/v1/auth', authLimiter, authRouter);
 app.use('/api/v1/me', apiLimiter, meRouter);
 app.use('/api/v1/transactions', apiLimiter, transactionsRouter);
 app.use('/api/v1/insights', apiLimiter, insightsRouter);
+app.use('/api/v1/admin', adminRouter);
 
 // Start Server
 const PORT = process.env.PORT || 5080;
