@@ -1,153 +1,157 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import crypto from 'node:crypto';
-import { AuthenticatedRequest, requireAuth } from '../middleware/auth.js';
+import type { Filter } from 'mongodb';
+import { AuthenticatedRequest, requireAuth, userIdOf } from '../middleware/auth.js';
 import { getDb } from '../db/mongo.js';
 import { TransactionDoc } from '../db/models.js';
+import { CATEGORY_IDS, DIRECTIONS, MODES, SOURCES } from '../domain.js';
+import { problem, validationProblem } from '../http.js';
 
 export const transactionsRouter = Router();
 transactionsRouter.use(requireAuth);
 
-const transactionInputSchema = z.object({
-  id: z.string().optional(),
-  amountPaise: z.number().int().positive(),
-  direction: z.string().min(1),
-  merchant: z.string().nullable().optional(),
-  merchantNorm: z.string().nullable().optional(),
-  vpa: z.string().nullable().optional(),
-  mode: z.string().optional().default('UPI'),
-  accountLast4: z.string().nullable().optional(),
-  upiRef: z.string().nullable().optional(),
-  balancePaise: z.number().int().nullable().optional(),
-  category: z.string().min(1),
-  needsReview: z.boolean().optional().default(false),
-  note: z.string().nullable().optional(),
-  source: z.string().optional().default('sms'),
-  occurredAt: z.number().int(),
-  dedupeHash: z.string().min(1),
-  isExcluded: z.boolean().optional().default(false),
-  createdAt: z.number().int().optional(),
-  updatedAt: z.number().int().optional(),
-});
+export const MAX_SYNC_BATCH = 500;
+
+const paise = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+/** Parsed fields only (same shape as the mobile transaction schema); raw SMS text is never accepted. */
+const transactionInputSchema = z
+  .object({
+    id: z.string().trim().min(1).max(64),
+    amountPaise: paise.positive(),
+    direction: z.enum(DIRECTIONS),
+    merchant: optionalText(120),
+    merchantNorm: optionalText(120),
+    vpa: optionalText(120),
+    mode: z.enum(MODES),
+    accountLast4: z.string().regex(/^\d{3,4}$/).nullable().optional(),
+    upiRef: z.string().regex(/^\d{6,22}$/).nullable().optional(),
+    balancePaise: paise.nullable().optional(),
+    category: z.enum(CATEGORY_IDS),
+    needsReview: z.boolean().default(false),
+    note: optionalText(280),
+    source: z.enum(SOURCES),
+    occurredAt: z.number().int().positive(),
+    dedupeHash: z.string().regex(/^[0-9a-f]{64}$/),
+    isExcluded: z.boolean().default(false),
+    createdAt: z.number().int().positive().optional(),
+    updatedAt: z.number().int().positive().optional(),
+  })
+  .strict();
 
 const syncSchema = z.object({
-  transactions: z.array(transactionInputSchema),
+  transactions: z.array(transactionInputSchema).max(MAX_SYNC_BATCH),
 });
 
-const patchSchema = z.object({
-  category: z.string().optional(),
-  isExcluded: z.boolean().optional(),
-  note: z.string().nullable().optional(),
+const patchSchema = z
+  .object({
+    category: z.enum(CATEGORY_IDS).optional(),
+    isExcluded: z.boolean().optional(),
+    note: optionalText(280),
+  })
+  .strict();
+
+const listQuerySchema = z.object({
+  from: z.coerce.number().int().optional(),
+  to: z.coerce.number().int().optional(),
+  category: z.enum(CATEGORY_IDS).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-// POST /api/v1/transactions/sync
+/** Never return Mongo's _id or the owner id to clients. */
+const PUBLIC_PROJECTION = { _id: 0, userId: 0 } as const;
+
+// POST /api/v1/transactions/sync — idempotent on (userId, dedupeHash)
 transactionsRouter.post('/sync', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const parse = syncSchema.safeParse(req.body);
   if (!parse.success) {
-    res.status(400).json({
-      title: 'One or more validation errors occurred.',
-      status: 400,
-      errors: parse.error.flatten().fieldErrors,
-    });
+    validationProblem(res, parse.error);
     return;
   }
 
-  const userId = req.userId!;
-  const db = getDb();
-  const collection = db.collection<TransactionDoc>('transactions');
+  const userId = userIdOf(req);
+  const collection = getDb().collection<TransactionDoc>('transactions');
   const nowMs = Date.now();
 
   let inserted = 0;
   let updated = 0;
-  let total = 0;
 
   for (const t of parse.data.transactions) {
-    const txId = t.id || crypto.randomUUID().replace(/-/g, '');
-    const dedupeHash = t.dedupeHash.trim().toLowerCase();
-
     const result = await collection.updateOne(
-      { userId, dedupeHash },
+      { userId, dedupeHash: t.dedupeHash },
       {
         $setOnInsert: {
-          id: txId,
+          id: t.id,
           userId,
-          dedupeHash,
+          dedupeHash: t.dedupeHash,
           occurredAt: t.occurredAt,
           amountPaise: t.amountPaise,
-          direction: t.direction.trim().toLowerCase(),
-          mode: t.mode ?? 'UPI',
-          source: t.source ?? 'sms',
+          direction: t.direction,
+          mode: t.mode,
+          source: t.source,
           createdAt: t.createdAt ?? nowMs,
         },
         $set: {
-          category: t.category.trim(),
+          category: t.category,
           needsReview: t.needsReview,
-          note: t.note ? t.note.trim() : null,
+          note: t.note || null,
           isExcluded: t.isExcluded,
-          merchant: t.merchant ? t.merchant.trim() : null,
-          merchantNorm: t.merchantNorm ? t.merchantNorm.trim() : null,
-          vpa: t.vpa ? t.vpa.trim() : null,
-          accountLast4: t.accountLast4 ? t.accountLast4.trim() : null,
-          upiRef: t.upiRef ? t.upiRef.trim() : null,
-          balancePaise: t.balancePaise !== undefined ? t.balancePaise : null,
+          merchant: t.merchant || null,
+          merchantNorm: t.merchantNorm || null,
+          vpa: t.vpa || null,
+          accountLast4: t.accountLast4 ?? null,
+          upiRef: t.upiRef ?? null,
+          balancePaise: t.balancePaise ?? null,
           updatedAt: t.updatedAt ?? nowMs,
         },
       },
-      { upsert: true }
+      { upsert: true },
     );
 
-    if (result.upsertedCount > 0) {
-      inserted++;
-    } else if (result.matchedCount > 0) {
-      updated++;
-    }
-    total++;
+    if (result.upsertedCount > 0) inserted++;
+    else if (result.matchedCount > 0) updated++;
   }
 
-  res.status(200).json({ inserted, updated, total });
+  res.status(200).json({ inserted, updated, totalProcessed: parse.data.transactions.length });
 });
 
-// GET /api/v1/transactions
+// GET /api/v1/transactions?from&to&category&page&pageSize
 transactionsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const from = req.query.from ? Number(req.query.from) : undefined;
-  const to = req.query.to ? Number(req.query.to) : undefined;
-  const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
-  const page = Math.max(1, Number(req.query.page) || 1);
-  const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 50));
-
-  const filter: any = { userId };
-  if (from !== undefined) {
-    filter.occurredAt = filter.occurredAt || {};
-    filter.occurredAt.$gte = from;
+  const parse = listQuerySchema.safeParse(req.query);
+  if (!parse.success) {
+    validationProblem(res, parse.error);
+    return;
   }
-  if (to !== undefined) {
-    filter.occurredAt = filter.occurredAt || {};
-    filter.occurredAt.$lte = to;
+  const { from, to, category, page, pageSize } = parse.data;
+
+  const filter: Filter<TransactionDoc> = { userId: userIdOf(req) };
+  if (from !== undefined || to !== undefined) {
+    filter.occurredAt = {
+      ...(from !== undefined ? { $gte: from } : {}),
+      ...(to !== undefined ? { $lte: to } : {}),
+    };
   }
-  if (category) {
-    filter.category = category;
-  }
+  if (category) filter.category = category;
 
-  const db = getDb();
-  const collection = db.collection<TransactionDoc>('transactions');
-
-  const totalCount = await collection.countDocuments(filter);
-  const totalPages = Math.ceil(totalCount / pageSize);
-
-  const items = await collection
-    .find(filter)
-    .sort({ occurredAt: -1 })
-    .skip((page - 1) * pageSize)
-    .limit(pageSize)
-    .toArray();
+  const collection = getDb().collection<TransactionDoc>('transactions');
+  const [totalCount, items] = await Promise.all([
+    collection.countDocuments(filter),
+    collection
+      .find(filter, { projection: PUBLIC_PROJECTION })
+      .sort({ occurredAt: -1, id: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray(),
+  ]);
 
   res.status(200).json({
     items,
     totalCount,
     page,
     pageSize,
-    totalPages,
+    totalPages: Math.ceil(totalCount / pageSize),
   });
 });
 
@@ -155,41 +159,26 @@ transactionsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Pr
 transactionsRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const parse = patchSchema.safeParse(req.body);
   if (!parse.success) {
-    res.status(400).json({
-      title: 'One or more validation errors occurred.',
-      status: 400,
-      errors: parse.error.flatten().fieldErrors,
-    });
+    validationProblem(res, parse.error);
     return;
   }
 
-  const userId = req.userId!;
-  const txId = req.params.id;
-  const db = getDb();
-  const collection = db.collection<TransactionDoc>('transactions');
+  const set: Partial<TransactionDoc> = { updatedAt: Date.now() };
+  if (parse.data.category !== undefined) set.category = parse.data.category;
+  if (parse.data.isExcluded !== undefined) set.isExcluded = parse.data.isExcluded;
+  if (parse.data.note !== undefined) set.note = parse.data.note || null;
 
-  const updateFields: any = { updatedAt: Date.now() };
-  if (parse.data.category !== undefined) {
-    updateFields.category = parse.data.category.trim();
-  }
-  if (parse.data.isExcluded !== undefined) {
-    updateFields.isExcluded = parse.data.isExcluded;
-  }
-  if (parse.data.note !== undefined) {
-    updateFields.note = parse.data.note ? parse.data.note.trim() : null;
-  }
+  const updated = await getDb()
+    .collection<TransactionDoc>('transactions')
+    .findOneAndUpdate(
+      { userId: userIdOf(req), id: String(req.params.id) },
+      { $set: set },
+      { returnDocument: 'after', projection: PUBLIC_PROJECTION },
+    );
 
-  const result = await collection.findOneAndUpdate(
-    { userId, id: txId },
-    { $set: updateFields },
-    { returnDocument: 'after' }
-  );
-
-  const updated = result as unknown as TransactionDoc | null;
   if (!updated) {
-    res.status(404).json({ status: 404, title: 'Transaction not found' });
+    problem(res, 404, 'Transaction not found');
     return;
   }
-
   res.status(200).json(updated);
 });

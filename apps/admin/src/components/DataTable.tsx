@@ -9,8 +9,6 @@ import {
   Eye,
   Edit2,
   Trash2,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react';
 
 export interface Column<T> {
@@ -54,7 +52,7 @@ export function DataTable<T>({
   emptyMessage = 'No records found matching your filters',
   pageSize = 10,
 }: DataTableProps<T>) {
-  const [internalSearch, setInternalSearch] = useState('');
+  const [internalSearch] = useState('');
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});

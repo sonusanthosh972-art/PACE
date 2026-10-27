@@ -43,7 +43,6 @@ export function generateTokens(user: { id: string; email: string; name: string }
 
   const payload = {
     sub: user.id,
-    id: user.id,
     email: user.email,
     name: user.name,
     jti: crypto.randomUUID().replace(/-/g, ''),
@@ -52,6 +51,7 @@ export function generateTokens(user: { id: string; email: string; name: string }
   const accessToken = jwt.sign(payload, secret, {
     issuer: JWT_ISSUER,
     audience: JWT_AUDIENCE,
+    algorithm: 'HS256',
     expiresIn: '15m',
   });
 
@@ -64,10 +64,19 @@ export function generateTokens(user: { id: string; email: string; name: string }
   };
 }
 
-export function verifyAccessToken(token: string): any {
-  const secret = getJwtSecret();
-  return jwt.verify(token, secret, {
+export interface AccessClaims {
+  sub: string;
+  email: string;
+}
+
+export function verifyAccessToken(token: string): AccessClaims {
+  const decoded = jwt.verify(token, getJwtSecret(), {
     issuer: JWT_ISSUER,
     audience: JWT_AUDIENCE,
+    algorithms: ['HS256'],
   });
+  if (typeof decoded !== 'object' || typeof decoded.sub !== 'string' || !decoded.sub) {
+    throw new Error('Token has no subject');
+  }
+  return { sub: decoded.sub, email: typeof decoded.email === 'string' ? decoded.email : '' };
 }

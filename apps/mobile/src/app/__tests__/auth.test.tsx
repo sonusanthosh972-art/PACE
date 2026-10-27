@@ -8,6 +8,7 @@ import { useAuthStore } from '@/state/authStore';
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack() },
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('@/data/appDb', () => ({

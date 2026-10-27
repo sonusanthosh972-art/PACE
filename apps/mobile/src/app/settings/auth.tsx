@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
@@ -12,9 +12,8 @@ import { TextField } from '@/components/Fields';
 import { Icon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { getAppDb } from '@/data/appDb';
-import { getProfile } from '@/data/profileRepo';
 import { setSetting } from '@/data/settingsRepo';
-import { countTransactions } from '@/data/transactionsRepo';
+import { completeAccountFlow, type NextStep } from '@/services/accountFlow';
 import { getApiBaseUrl, setApiBaseUrl, testConnection } from '@/services/api/client';
 import { restoreFromServer } from '@/services/restore';
 import { syncNow } from '@/services/sync';
@@ -67,7 +66,8 @@ export default function AuthScreen() {
     logout,
   } = useAuthStore();
 
-  const [mode, setMode] = useState<Mode>('login');
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<Mode>(params.mode === 'register' ? 'register' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -88,6 +88,18 @@ export default function AuthScreen() {
     });
   }, []);
 
+  /** Continues the ordered flow: setup → permissions → Today (see completeAccountFlow). */
+  const goNext = async (next: NextStep) => {
+    await invalidateAll(queryClient);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    if (next === '/(tabs)' && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.dismissAll();
+    router.replace(next);
+  };
+
   const onBiometricSignIn = async () => {
     setError(null);
     const authed = await authenticateWithBiometrics(`Sign in with ${biometryName}`);
@@ -104,23 +116,8 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       const db = await getAppDb();
-      await login(creds.email, creds.password);
-      const localProfile = await getProfile(db);
-      const localCount = await countTransactions(db);
-      if (localCount === 0 && (!localProfile || localProfile.monthlySalaryPaise === 0)) {
-        await restoreFromServer(db);
-      } else {
-        await syncNow(db);
-      }
-
-      await setSetting(db, 'onboardingComplete', true);
-      await invalidateAll(queryClient);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
+      const next = await completeAccountFlow(db, 'login', () => login(creds.email, creds.password));
+      await goNext(next);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Biometric sign-in failed. Please try again.';
@@ -180,34 +177,16 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       const db = await getAppDb();
-      if (mode === 'register') {
-        await register(trimmedEmail, password, trimmedName);
-        // Brand-new account: upload local profile and transactions to new account
-        await syncNow(db);
-      } else {
-        await login(trimmedEmail, password);
-        // Signing in: if device is completely empty (no salary and no transactions), restore from cloud
-        const localProfile = await getProfile(db);
-        const localCount = await countTransactions(db);
-        if (localCount === 0 && (!localProfile || localProfile.monthlySalaryPaise === 0)) {
-          await restoreFromServer(db);
-        } else {
-          await syncNow(db);
-        }
-      }
+      const next = await completeAccountFlow(db, mode, () =>
+        mode === 'register'
+          ? register(trimmedEmail, password, trimmedName)
+          : login(trimmedEmail, password),
+      );
 
       if (hasBiometrics) {
         await saveBiometricCredentials(trimmedEmail, password);
       }
-
-      await setSetting(db, 'onboardingComplete', true);
-      await invalidateAll(queryClient);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
+      await goNext(next);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Something went wrong. Please try again.';
@@ -388,8 +367,9 @@ export default function AuthScreen() {
     <Screen>
       <AppText variant="title">Account & Backup</AppText>
       <AppText color="muted">
-        Sign in to mirror your budget and transactions to your private server. Sign in is completely
-        optional: without an account, Paisa Pulse works 100% offline.
+        {mode === 'register'
+          ? 'Create your account. Next you set up your budget and allow bank SMS, so everything you see is your real spending.'
+          : 'Sign in to continue. Your budget and transactions are restored from your server.'}
       </AppText>
 
       <Segmented

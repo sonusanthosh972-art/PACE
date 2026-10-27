@@ -1,110 +1,95 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { getDb } from '../db/mongo.js';
 import { UserDoc, FixedExpenseDoc, TransactionDoc, DailySummaryDoc } from '../db/models.js';
-import { computeCycle, countsAsSpend } from '../routes/insights.js';
+import {
+  addDays,
+  computeTodayBudget,
+  countsAsSpend,
+  cycleFor,
+  daysLeftInCycle,
+  endOfDayMs,
+  netSpend,
+  startOfDayMs,
+  toDateKey,
+  type DateKey,
+} from '../domain.js';
 
-export function startDailySummaryCron(): void {
-  // Runs every day at 00:00 (Midnight IST = 18:30 UTC or set local time)
-  // node-cron supports timezone parameter!
-  cron.schedule(
+/** Builds yesterday's summary for every user at 00:00 IST. */
+export function startDailySummaryCron(): ScheduledTask {
+  const task = cron.schedule(
     '0 0 * * *',
     async () => {
-      console.log('[DailySummaryJob] Starting nightly daily summary job at midnight IST...');
       try {
         await executeDailySummaryJob();
-      } catch (err: any) {
-        console.error('[DailySummaryJob] Error executing job:', err);
+      } catch (err) {
+        console.error('[DailySummaryJob] Job failed:', err instanceof Error ? err.message : err);
       }
     },
-    {
-      timezone: 'Asia/Kolkata',
-    }
+    { timezone: 'Asia/Kolkata' },
   );
-  console.log('[DailySummaryJob] Scheduled nightly cron job at 00:00 Asia/Kolkata');
+  console.log('[DailySummaryJob] Scheduled nightly at 00:00 Asia/Kolkata');
+  return task;
 }
 
-export async function executeDailySummaryJob(): Promise<void> {
-  const db = getDb();
-  const users = await db.collection<UserDoc>('users').find({}).toArray();
+export async function executeDailySummaryJob(nowMs: number = Date.now()): Promise<number> {
+  const day = addDays(toDateKey(nowMs), -1);
+  const users = await getDb().collection<UserDoc>('users').find({}).toArray();
 
+  let built = 0;
   for (const user of users) {
     try {
-      await buildSummaryForUser(user);
-    } catch (err: any) {
-      console.error(`[DailySummaryJob] Failed for user ${user.id}:`, err);
+      await buildSummaryForUser(user, day);
+      built++;
+    } catch (err) {
+      console.error(`[DailySummaryJob] Failed for one user:`, err instanceof Error ? err.message : err);
     }
   }
-
-  console.log(`[DailySummaryJob] Completed summary build for ${users.length} users.`);
+  console.log(`[DailySummaryJob] Built ${built}/${users.length} summaries for ${day}.`);
+  return built;
 }
 
-async function buildSummaryForUser(user: UserDoc): Promise<void> {
+export async function buildSummaryForUser(user: UserDoc, day: DateKey): Promise<DailySummaryDoc> {
   const db = getDb();
-  const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-  const yYear = yesterday.getFullYear();
-  const yMonth = String(yesterday.getMonth() + 1).padStart(2, '0');
-  const yDay = String(yesterday.getDate()).padStart(2, '0');
-  const dateKey = `${yYear}-${yMonth}-${yDay}`;
-
-  const cycle = computeCycle(yesterday, user.payday ?? 1);
+  const cycle = cycleFor(day, user.payday ?? 1);
 
   const fixedExpenses = await db.collection<FixedExpenseDoc>('fixedExpenses').find({ userId: user.id }).toArray();
   const totalFixed = fixedExpenses.reduce((sum, f) => sum + f.amountPaise, 0);
-  const discretionary = Math.max(0, (user.salaryPaise ?? 0) - (user.savingsGoalPaise ?? 0) - totalFixed);
-
-  const startMs = new Date(cycle.start.getFullYear(), cycle.start.getMonth(), cycle.start.getDate(), 0, 0, 0, 0).getTime();
-  const yesterdayEndMs = new Date(yYear, Number(yMonth) - 1, Number(yDay), 23, 59, 59, 999).getTime();
+  const spendable = (user.salaryPaise ?? 0) - totalFixed - (user.savingsGoalPaise ?? 0);
 
   const cycleTxs = await db
     .collection<TransactionDoc>('transactions')
-    .find({
-      userId: user.id,
-      occurredAt: { $gte: startMs, $lte: yesterdayEndMs },
-    })
+    .find({ userId: user.id, occurredAt: { $gte: startOfDayMs(cycle.start), $lte: endOfDayMs(day) } })
     .toArray();
 
-  const spendTxs = cycleTxs.filter(countsAsSpend);
+  const dayStart = startOfDayMs(day);
+  const before = cycleTxs.filter((t) => t.occurredAt < dayStart);
+  const onDay = cycleTxs.filter((t) => t.occurredAt >= dayStart);
 
-  const yesterdayStartMs = new Date(yYear, Number(yMonth) - 1, Number(yDay), 0, 0, 0, 0).getTime();
-  const spendBeforeYesterday = spendTxs
-    .filter((t) => t.occurredAt < yesterdayStartMs)
-    .reduce((sum, t) => sum + t.amountPaise, 0);
-
-  const yesterdayTxs = spendTxs.filter((t) => t.occurredAt >= yesterdayStartMs && t.occurredAt <= yesterdayEndMs);
-  const spentYesterday = yesterdayTxs.reduce((sum, t) => sum + t.amountPaise, 0);
-
-  const daysRemaining = Math.max(1, Math.ceil((cycle.end.getTime() - yesterday.getTime()) / (1000 * 60 * 60 * 24)));
-  const budgetYesterday = Math.max(0, Math.floor((discretionary - spendBeforeYesterday) / daysRemaining));
-
-  // Top category
-  const catCount = new Map<string, number>();
-  for (const t of yesterdayTxs) {
-    catCount.set(t.category, (catCount.get(t.category) || 0) + t.amountPaise);
+  const categorySpend = new Map<string, number>();
+  for (const t of onDay.filter(countsAsSpend)) {
+    categorySpend.set(t.category, (categorySpend.get(t.category) ?? 0) + t.amountPaise);
   }
   let topCategory: string | null = null;
-  let maxCatSpend = 0;
-  for (const [cat, spend] of catCount.entries()) {
-    if (spend > maxCatSpend) {
-      maxCatSpend = spend;
-      topCategory = cat;
+  let topSpend = 0;
+  for (const [category, spend] of categorySpend) {
+    if (spend > topSpend) {
+      topSpend = spend;
+      topCategory = category;
     }
   }
 
-  const summaryDoc: DailySummaryDoc = {
-    id: `${user.id}_${dateKey}`,
+  const summary: DailySummaryDoc = {
+    id: `${user.id}_${day}`,
     userId: user.id,
-    dateKey,
-    budgetPaise: budgetYesterday,
-    spentPaise: spentYesterday,
+    dateKey: day,
+    budgetPaise: computeTodayBudget(spendable, netSpend(before), daysLeftInCycle(day, cycle)),
+    spentPaise: netSpend(onDay),
     topCategory,
     calculatedAt: new Date(),
   };
 
-  await db.collection<DailySummaryDoc>('dailySummaries').updateOne(
-    { userId: user.id, dateKey },
-    { $set: summaryDoc },
-    { upsert: true }
-  );
+  await db
+    .collection<DailySummaryDoc>('dailySummaries')
+    .updateOne({ userId: user.id, dateKey: day }, { $set: summary }, { upsert: true });
+  return summary;
 }

@@ -1,26 +1,19 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type {
   AdminDailySummary,
   AdminFixedExpense,
   AdminSubscription,
   AdminTransaction,
   AdminUser,
+  AdminOverviewStats,
+  AdminSystemHealth,
   AdminUserRule,
+  AuditLogItem,
   TabType,
 } from '../lib/types';
-import {
-  INITIAL_USERS,
-  INITIAL_TRANSACTIONS,
-  INITIAL_FIXED_EXPENSES,
-  INITIAL_RULES,
-  INITIAL_SUMMARIES,
-  INITIAL_SUBSCRIPTIONS,
-  SYSTEM_HEALTH,
-  OVERVIEW_STATS,
-  AUDIT_LOGS,
-} from '../lib/mockData';
+import { fetchLiveData, type LiveData } from '../lib/liveData';
 import {
   formatINR,
   formatINRCompact,
@@ -41,16 +34,36 @@ import {
   CreditCard,
   CalendarCheck,
   ShieldAlert,
-  PiggyBank,
   CheckCircle2,
-  AlertCircle,
-  Database,
-  ArrowUpRight,
-  TrendingDown,
-  Repeat,
-  Sparkles,
-  Info,
 } from 'lucide-react';
+
+const EMPTY_STATS: AdminOverviewStats = {
+  totalUsers: 0,
+  activeUsers: 0,
+  totalVolumePaise: 0,
+  totalTransactionsCount: 0,
+  totalFixedExpensesPaise: 0,
+  totalSavingsGoalsPaise: 0,
+  todayVolumePaise: 0,
+  avgDailyBudgetPaise: 0,
+  exclusionRatio: 0,
+};
+
+const EMPTY_HEALTH: AdminSystemHealth = {
+  database: 'disconnected',
+  latencyMs: 0,
+  activeUsers24h: 0,
+  rateLimitHits: 0,
+  totalSyncedTxs: 0,
+  memoryUsageMb: 0,
+  uptimeHours: 0,
+};
+
+const NOT_TRACKED_RULES: AdminUserRule[] = [];
+const NOT_TRACKED_SUBSCRIPTIONS: AdminSubscription[] = [];
+const NOT_TRACKED_LOGS: AuditLogItem[] = [];
+
+const DAY_LABEL = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -58,23 +71,25 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Core Data States
-  const [users, setUsers] = useState<AdminUser[]>(INITIAL_USERS);
-  const [transactions, setTransactions] = useState<AdminTransaction[]>(INITIAL_TRANSACTIONS);
-  const [fixedExpenses, setFixedExpenses] = useState<AdminFixedExpense[]>(INITIAL_FIXED_EXPENSES);
-  const [rules, setRules] = useState<AdminUserRule[]>(INITIAL_RULES);
-  const [summaries, setSummaries] = useState<AdminDailySummary[]>(INITIAL_SUMMARIES);
-  const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>(INITIAL_SUBSCRIPTIONS);
-  const [logs, setLogs] = useState(AUDIT_LOGS);
+  // Real data only: everything below comes from the API (no sample data in the admin).
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
+  const [fixedExpenses, setFixedExpenses] = useState<AdminFixedExpense[]>([]);
+  const [summaries, setSummaries] = useState<AdminDailySummary[]>([]);
+  const [overview, setOverview] = useState<AdminOverviewStats>(EMPTY_STATS);
+  const [health, setHealth] = useState<AdminSystemHealth>(EMPTY_HEALTH);
+  // Not stored by the API yet, so these tabs stay empty instead of showing invented rows.
+  const rules = NOT_TRACKED_RULES;
+  const subscriptions = NOT_TRACKED_SUBSCRIPTIONS;
+  const logs = NOT_TRACKED_LOGS;
 
-  // Modals
+  const [dataSource, setDataSource] = useState<'loading' | 'live' | 'offline'>('loading');
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState(() => Date.now());
+
+  // Modals (read-only details)
   const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [viewingTx, setViewingTx] = useState<AdminTransaction | null>(null);
-  const [editingTx, setEditingTx] = useState<AdminTransaction | null>(null);
-  const [isAddingTx, setIsAddingTx] = useState(false);
-  const [isAddingRule, setIsAddingRule] = useState(false);
-  const [isAddingFixed, setIsAddingFixed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -82,38 +97,42 @@ export default function AdminPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const applyLive = useCallback((data: LiveData) => {
+    setOverview(data.stats);
+    setHealth(data.health);
+    setUsers(data.users);
+    setTransactions(data.transactions);
+    setFixedExpenses(data.fixedExpenses);
+    setSummaries(data.summaries);
+    setDataSource('live');
+    setDataError(null);
+    setLoadedAt(Date.now());
+  }, []);
+
+  const applyOffline = useCallback((err: unknown) => {
+    setDataSource('offline');
+    setDataError(err instanceof Error ? err.message : 'API unreachable');
+  }, []);
+
+  useEffect(() => {
+    fetchLiveData().then(applyLive, applyOffline);
+  }, [applyLive, applyOffline]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      showToast('Database records synced with .NET API');
-    }, 600);
+    fetchLiveData()
+      .then(
+        (data) => {
+          applyLive(data);
+          showToast('Refreshed from the live API');
+        },
+        (err: unknown) => {
+          applyOffline(err);
+          showToast('Could not reach the API');
+        },
+      )
+      .finally(() => setIsRefreshing(false));
   };
-
-  // Form states
-  const [newTxForm, setNewTxForm] = useState({
-    userId: users[0]?.id ?? 'usr_arjun_01',
-    amountRupees: 500,
-    direction: 'debit' as 'debit' | 'credit',
-    merchant: '',
-    category: 'food',
-    mode: 'UPI' as 'UPI' | 'CARD' | 'ATM' | 'IMPS' | 'NEFT' | 'AUTOPAY' | 'OTHER',
-    note: '',
-    isExcluded: false,
-  });
-
-  const [newRuleForm, setNewRuleForm] = useState({
-    pattern: '',
-    category: 'groceries',
-  });
-
-  const [newFixedForm, setNewFixedForm] = useState({
-    userId: users[0]?.id ?? 'usr_arjun_01',
-    name: '',
-    amountRupees: 5000,
-    dueDay: 5,
-    category: 'rent_emi',
-  });
 
   // Export CSV
   const handleExport = () => {
@@ -139,18 +158,27 @@ export default function AdminPage() {
     showToast(`Exported ${activeTab} to CSV`);
   };
 
-  // Dynamic Chart Points
+  // Debit volume for the last 7 days (IST), from the loaded transactions
   const chartPoints = useMemo(() => {
-    return [
-      { day: '21 Oct', amountPaise: 8_200_00, count: 18 },
-      { day: '22 Oct', amountPaise: 14_500_00, count: 24 },
-      { day: '23 Oct', amountPaise: 11_300_00, count: 19 },
-      { day: '24 Oct', amountPaise: 29_400_00, count: 42 },
-      { day: '25 Oct', amountPaise: 18_100_00, count: 31 },
-      { day: '26 Oct', amountPaise: 24_800_00, count: 36 },
-      { day: '27 Oct', amountPaise: OVERVIEW_STATS.todayVolumePaise, count: 28 },
-    ];
-  }, []);
+    const IST_OFFSET_MS = 330 * 60 * 1000;
+    const DAY_MS = 86_400_000;
+    const dayIndex = (ms: number) => Math.floor((ms + IST_OFFSET_MS) / DAY_MS);
+    const lastDay = dayIndex(loadedAt);
+    const points = Array.from({ length: 7 }, (_, i) => {
+      const idx = lastDay - 6 + i;
+      const label = DAY_LABEL.format(idx * DAY_MS);
+      return { idx, day: label, amountPaise: 0, count: 0 };
+    });
+    for (const t of transactions) {
+      if (t.direction !== 'debit' || t.isExcluded) continue;
+      const point = points.find((p) => p.idx === dayIndex(t.occurredAt));
+      if (point) {
+        point.amountPaise += t.amountPaise;
+        point.count += 1;
+      }
+    }
+    return points.map(({ day, amountPaise, count }) => ({ day, amountPaise, count }));
+  }, [transactions, loadedAt]);
 
   // Category Slices
   const categorySlices = useMemo(() => {
@@ -578,10 +606,7 @@ export default function AdminPage() {
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
           onQuickAction={(action) => {
-            if (action === 'add_tx') setIsAddingTx(true);
-            else if (action === 'add_rule') setIsAddingRule(true);
-            else if (action === 'add_fixed') setIsAddingFixed(true);
-            else if (action === 'sandbox') setActiveTab('parser-sandbox');
+            if (action === 'sandbox') setActiveTab('parser-sandbox');
             else if (action === 'export') handleExport();
           }}
           searchQuery={searchQuery}
@@ -589,6 +614,39 @@ export default function AdminPage() {
         />
 
         <main style={{ flex: 1, padding: '28px', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
+          {dataSource !== 'live' && (
+            <div
+              role="status"
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-surface-elevated)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                fontSize: '13px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {dataSource === 'loading'
+                ? 'Connecting to the Paisa Pulse API…'
+                : `Cannot load data: ${dataError ?? 'the API is unreachable'}. Start the API (npm run api), check ADMIN_API_KEY, then press refresh.`}
+            </div>
+          )}
+          {dataSource === 'live' && (activeTab === 'rules' || activeTab === 'subscriptions' || activeTab === 'health-logs') && (
+            <div
+              role="note"
+              style={{
+                marginBottom: '20px',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-surface-elevated)',
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Not tracked by the server yet: categorisation rules stay on each phone, and subscription detection and audit logs are not built yet.
+            </div>
+          )}
           {/* TAB 1: EXECUTIVE OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -602,7 +660,7 @@ export default function AdminPage() {
               >
                 <StatCard
                   title="Registered Users"
-                  value={String(OVERVIEW_STATS.totalUsers)}
+                  value={String(overview.totalUsers)}
                   subtext="4 Active syncing daily"
                   trend={{ value: '+20%', direction: 'up' }}
                   icon={<Users size={20} />}
@@ -610,7 +668,7 @@ export default function AdminPage() {
                 />
                 <StatCard
                   title="Total Tracked Spend"
-                  value={formatINRCompact(OVERVIEW_STATS.totalVolumePaise)}
+                  value={formatINRCompact(overview.totalVolumePaise)}
                   subtext="Gross volume across India"
                   trend={{ value: '+14.2%', direction: 'up' }}
                   icon={<CreditCard size={20} />}
@@ -618,7 +676,7 @@ export default function AdminPage() {
                 />
                 <StatCard
                   title="Locked Essentials"
-                  value={formatINRCompact(OVERVIEW_STATS.totalFixedExpensesPaise)}
+                  value={formatINRCompact(overview.totalFixedExpensesPaise)}
                   subtext="Rent, EMIs & SIPs set aside"
                   icon={<CalendarCheck size={20} />}
                   accentColor="amber"
@@ -672,37 +730,37 @@ export default function AdminPage() {
                       <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                         Architecture Health & Engine Metrics
                       </h3>
-                      <span className="badge badge-emerald">
-                        <span className="badge-dot" /> Connected
+                      <span className={`badge ${dataSource === 'live' ? 'badge-emerald' : 'badge-amber'}`}>
+                        <span className="badge-dot" /> {dataSource === 'live' ? 'Connected' : dataSource === 'loading' ? 'Connecting…' : 'Offline'}
                       </span>
                     </div>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                      .NET 10 API, MongoDB Replica Set & Native Android SMS Module
+                      Node.js API (Express), MongoDB & Native Android SMS Module
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                       <div style={{ padding: '10px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Database Ping</div>
                         <div style={{ fontSize: '16px', fontWeight: 700, color: '#10B981', marginTop: '2px' }} className="mono">
-                          {SYSTEM_HEALTH.latencyMs} ms
+                          {health.latencyMs} ms
                         </div>
                       </div>
                       <div style={{ padding: '10px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Memory Usage</div>
                         <div style={{ fontSize: '16px', fontWeight: 700, color: '#FFF', marginTop: '2px' }} className="mono">
-                          {SYSTEM_HEALTH.memoryUsageMb} MB
+                          {health.memoryUsageMb} MB
                         </div>
                       </div>
                       <div style={{ padding: '10px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Uptime</div>
                         <div style={{ fontSize: '16px', fontWeight: 700, color: '#818CF8', marginTop: '2px' }} className="mono">
-                          {SYSTEM_HEALTH.uptimeHours} hrs
+                          {health.uptimeHours} hrs
                         </div>
                       </div>
                       <div style={{ padding: '10px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Rate Limit Hits (24h)</div>
                         <div style={{ fontSize: '16px', fontWeight: 700, color: '#F59E0B', marginTop: '2px' }} className="mono">
-                          {SYSTEM_HEALTH.rateLimitHits} blocked
+                          {health.rateLimitHits} blocked
                         </div>
                       </div>
                     </div>
@@ -734,7 +792,6 @@ export default function AdminPage() {
                   columns={transactionColumns}
                   keyExtractor={(t) => t.id}
                   onView={(t) => setViewingTx(t)}
-                  onEdit={(t) => setEditingTx(t)}
                   pageSize={5}
                 />
               </div>
@@ -763,7 +820,6 @@ export default function AdminPage() {
                   },
                 ]}
                 onView={(u) => setViewingUser(u)}
-                onEdit={(u) => setEditingUser(u)}
               />
             </div>
           )}
@@ -811,11 +867,6 @@ export default function AdminPage() {
                   },
                 ]}
                 onView={(t) => setViewingTx(t)}
-                onEdit={(t) => setEditingTx(t)}
-                onDelete={(t) => {
-                  setTransactions((prev) => prev.filter((x) => x.id !== t.id));
-                  showToast(`Transaction ${t.id} deleted`);
-                }}
                 pageSize={10}
               />
             </div>
@@ -830,10 +881,6 @@ export default function AdminPage() {
                 keyExtractor={(f) => f.id}
                 searchField={(f) => `${f.name} ${f.userName || ''}`}
                 externalSearchQuery={searchQuery}
-                onDelete={(f) => {
-                  setFixedExpenses((prev) => prev.filter((x) => x.id !== f.id));
-                  showToast(`Fixed expense "${f.name}" removed`);
-                }}
               />
             </div>
           )}
@@ -847,10 +894,6 @@ export default function AdminPage() {
                 keyExtractor={(r) => r.id}
                 searchField={(r) => `${r.pattern} ${r.category}`}
                 externalSearchQuery={searchQuery}
-                onDelete={(r) => {
-                  setRules((prev) => prev.filter((x) => x.id !== r.id));
-                  showToast(`Rule "${r.pattern}" deleted`);
-                }}
               />
             </div>
           )}
@@ -877,24 +920,6 @@ export default function AdminPage() {
                 keyExtractor={(s) => s.id}
                 searchField={(s) => `${s.name} ${s.merchantNorm} ${s.userName || ''}`}
                 externalSearchQuery={searchQuery}
-                onEdit={(s) => {
-                  // Promote to fixed commitment
-                  setFixedExpenses((prev) => [
-                    ...prev,
-                    {
-                      id: `fix_promoted_${Date.now()}`,
-                      userId: s.userId,
-                      userName: s.userName,
-                      name: s.name,
-                      amountPaise: s.amountPaise,
-                      dueDay: s.dueDay,
-                      createdAt: Date.now(),
-                      frequency: 'Monthly',
-                      category: 'subscriptions',
-                    },
-                  ]);
-                  showToast(`Promoted "${s.name}" to Fixed Commitments`);
-                }}
               />
             </div>
           )}
@@ -1050,121 +1075,20 @@ export default function AdminPage() {
         )}
       </Modal>
 
-      {/* MODAL 2: EDIT USER */}
+      {/* MODAL 2: VIEW TRANSACTION */}
       <Modal
-        isOpen={editingUser !== null}
-        onClose={() => setEditingUser(null)}
-        title="Edit User Financial Profile"
-        subtitle={`Editing ${editingUser?.name}`}
+        isOpen={viewingTx !== null}
+        onClose={() => setViewingTx(null)}
+        title="Transaction Dossier"
+        subtitle={`ID: ${viewingTx?.id}`}
         footer={
-          <>
-            <button onClick={() => setEditingUser(null)} className="btn btn-ghost">
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (editingUser) {
-                  setUsers((prev) => prev.map((u) => (u.id === editingUser.id ? editingUser : u)));
-                  showToast(`Updated profile for ${editingUser.name}`);
-                  setEditingUser(null);
-                }
-              }}
-              className="btn btn-primary"
-            >
-              Save Profile
-            </button>
-          </>
-        }
-      >
-        {editingUser && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={editingUser.name}
-                onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                className="input-text"
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                Monthly Take-Home Salary (₹)
-              </label>
-              <input
-                type="number"
-                value={editingUser.salaryPaise / 100}
-                onChange={(e) => setEditingUser({ ...editingUser, salaryPaise: Math.round(Number(e.target.value) * 100) })}
-                className="input-text"
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                Payday (1–31)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={31}
-                value={editingUser.payday}
-                onChange={(e) => setEditingUser({ ...editingUser, payday: Number(e.target.value) })}
-                className="input-text"
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                Monthly Savings Goal (₹)
-              </label>
-              <input
-                type="number"
-                value={editingUser.savingsGoalPaise / 100}
-                onChange={(e) =>
-                  setEditingUser({ ...editingUser, savingsGoalPaise: Math.round(Number(e.target.value) * 100) })
-                }
-                className="input-text"
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* MODAL 3: VIEW / EDIT TRANSACTION */}
-      <Modal
-        isOpen={viewingTx !== null || editingTx !== null}
-        onClose={() => {
-          setViewingTx(null);
-          setEditingTx(null);
-        }}
-        title={editingTx ? 'Edit Transaction Details' : 'Transaction Dossier'}
-        subtitle={`ID: ${(editingTx || viewingTx)?.id}`}
-        footer={
-          editingTx ? (
-            <>
-              <button onClick={() => setEditingTx(null)} className="btn btn-ghost">
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setTransactions((prev) => prev.map((t) => (t.id === editingTx.id ? editingTx : t)));
-                  showToast('Transaction updated');
-                  setEditingTx(null);
-                }}
-                className="btn btn-primary"
-              >
-                Save Changes
-              </button>
-            </>
-          ) : (
-            <button onClick={() => setViewingTx(null)} className="btn btn-secondary">
-              Close
-            </button>
-          )
+          <button onClick={() => setViewingTx(null)} className="btn btn-secondary">
+            Close
+          </button>
         }
       >
         {(() => {
-          const t = editingTx || viewingTx;
+          const t = viewingTx;
           if (!t) return null;
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -1176,48 +1100,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {editingTx ? (
-                <>
-                  <div>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Category
-                    </label>
-                    <select
-                      value={editingTx.category}
-                      onChange={(e) => setEditingTx({ ...editingTx, category: e.target.value })}
-                      className="select-input"
-                    >
-                      {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                        <option key={key} value={key}>
-                          {meta.emoji} {meta.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                      Note / Description
-                    </label>
-                    <input
-                      type="text"
-                      value={editingTx.note || ''}
-                      onChange={(e) => setEditingTx({ ...editingTx, note: e.target.value })}
-                      className="input-text"
-                    />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                    <input
-                      type="checkbox"
-                      id="exclude-check"
-                      checked={editingTx.isExcluded}
-                      onChange={(e) => setEditingTx({ ...editingTx, isExcluded: e.target.checked })}
-                    />
-                    <label htmlFor="exclude-check" style={{ fontSize: '13px', color: '#FFF', cursor: 'pointer' }}>
-                      Exclude from spend maths ("Not an expense" / CC Bill / Self Transfer)
-                    </label>
-                  </div>
-                </>
-              ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '12px' }}>
                   <div style={{ padding: '8px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Merchant</div>
@@ -1242,304 +1124,11 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
-              )}
             </div>
           );
         })()}
       </Modal>
 
-      {/* MODAL 4: ADD MANUAL TRANSACTION */}
-      <Modal
-        isOpen={isAddingTx}
-        onClose={() => setIsAddingTx(false)}
-        title="Add New Transaction"
-        subtitle="Manual entry ledger credit or debit"
-        footer={
-          <>
-            <button onClick={() => setIsAddingTx(false)} className="btn btn-ghost">
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                const user = users.find((u) => u.id === newTxForm.userId);
-                const tx: AdminTransaction = {
-                  id: `tx_${Date.now()}`,
-                  userId: newTxForm.userId,
-                  userName: user?.name,
-                  amountPaise: Math.round(newTxForm.amountRupees * 100),
-                  direction: newTxForm.direction,
-                  merchant: newTxForm.merchant || 'Manual Entry',
-                  merchantNorm: (newTxForm.merchant || 'manual').toLowerCase().replace(/\s+/g, '_'),
-                  vpa: null,
-                  mode: newTxForm.mode,
-                  accountLast4: null,
-                  upiRef: null,
-                  balancePaise: null,
-                  category: newTxForm.category,
-                  needsReview: false,
-                  note: newTxForm.note || null,
-                  source: 'manual',
-                  occurredAt: Date.now(),
-                  dedupeHash: `manual_${Date.now()}`,
-                  isExcluded: newTxForm.isExcluded,
-                  createdAt: Date.now(),
-                  updatedAt: Date.now(),
-                };
-                setTransactions((prev) => [tx, ...prev]);
-                showToast('Transaction created');
-                setIsAddingTx(false);
-              }}
-              className="btn btn-primary"
-            >
-              Add Transaction
-            </button>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              User Account
-            </label>
-            <select
-              value={newTxForm.userId}
-              onChange={(e) => setNewTxForm({ ...newTxForm, userId: e.target.value })}
-              className="select-input"
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.email})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Amount in Rupees (₹)
-            </label>
-            <input
-              type="number"
-              value={newTxForm.amountRupees}
-              onChange={(e) => setNewTxForm({ ...newTxForm, amountRupees: Number(e.target.value) })}
-              className="input-text"
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Merchant / Store
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Starbucks, Amazon, Zomato"
-              value={newTxForm.merchant}
-              onChange={(e) => setNewTxForm({ ...newTxForm, merchant: e.target.value })}
-              className="input-text"
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Category
-            </label>
-            <select
-              value={newTxForm.category}
-              onChange={(e) => setNewTxForm({ ...newTxForm, category: e.target.value })}
-              className="select-input"
-            >
-              {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.emoji} {meta.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Payment Channel
-            </label>
-            <select
-              value={newTxForm.mode}
-              onChange={(e) => setNewTxForm({ ...newTxForm, mode: e.target.value as any })}
-              className="select-input"
-            >
-              <option value="UPI">UPI</option>
-              <option value="CARD">Card</option>
-              <option value="AUTOPAY">Autopay Mandate</option>
-              <option value="IMPS">IMPS</option>
-              <option value="NEFT">NEFT</option>
-              <option value="ATM">ATM Cash</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="new-tx-excluded"
-              checked={newTxForm.isExcluded}
-              onChange={(e) => setNewTxForm({ ...newTxForm, isExcluded: e.target.checked })}
-            />
-            <label htmlFor="new-tx-excluded" style={{ fontSize: '12px', color: '#FFF' }}>
-              Exclude from daily spending allowance
-            </label>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL 5: ADD NEW RULE */}
-      <Modal
-        isOpen={isAddingRule}
-        onClose={() => setIsAddingRule(false)}
-        title="Create Categorization Rule"
-        subtitle="Map merchant strings automatically"
-        footer={
-          <>
-            <button onClick={() => setIsAddingRule(false)} className="btn btn-ghost">
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (!newRuleForm.pattern.trim()) return;
-                const r: AdminUserRule = {
-                  id: `rul_${Date.now()}`,
-                  pattern: newRuleForm.pattern.toLowerCase().trim(),
-                  category: newRuleForm.category,
-                  matchCount: 0,
-                  createdAt: Date.now(),
-                };
-                setRules((prev) => [r, ...prev]);
-                showToast(`Rule for "${r.pattern}" created`);
-                setIsAddingRule(false);
-                setNewRuleForm({ pattern: '', category: 'groceries' });
-              }}
-              className="btn btn-primary"
-            >
-              Save Rule
-            </button>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Pattern (lowercase substring match)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. netflix, swiggy, cult"
-              value={newRuleForm.pattern}
-              onChange={(e) => setNewRuleForm({ ...newRuleForm, pattern: e.target.value })}
-              className="input-text"
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Target Category
-            </label>
-            <select
-              value={newRuleForm.category}
-              onChange={(e) => setNewRuleForm({ ...newRuleForm, category: e.target.value })}
-              className="select-input"
-            >
-              {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.emoji} {meta.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL 6: ADD NEW FIXED EXPENSE */}
-      <Modal
-        isOpen={isAddingFixed}
-        onClose={() => setIsAddingFixed(false)}
-        title="Add Fixed Commitment"
-        subtitle="Lock an essential expense in advance"
-        footer={
-          <>
-            <button onClick={() => setIsAddingFixed(false)} className="btn btn-ghost">
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (!newFixedForm.name.trim()) return;
-                const user = users.find((u) => u.id === newFixedForm.userId);
-                const item: AdminFixedExpense = {
-                  id: `fix_${Date.now()}`,
-                  userId: newFixedForm.userId,
-                  userName: user?.name,
-                  name: newFixedForm.name.trim(),
-                  amountPaise: Math.round(newFixedForm.amountRupees * 100),
-                  dueDay: newFixedForm.dueDay,
-                  createdAt: Date.now(),
-                  frequency: 'Monthly',
-                  category: newFixedForm.category,
-                };
-                setFixedExpenses((prev) => [item, ...prev]);
-                showToast(`Fixed expense "${item.name}" added`);
-                setIsAddingFixed(false);
-              }}
-              className="btn btn-primary"
-            >
-              Save Commitment
-            </button>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              User
-            </label>
-            <select
-              value={newFixedForm.userId}
-              onChange={(e) => setNewFixedForm({ ...newFixedForm, userId: e.target.value })}
-              className="select-input"
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Commitment Name
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Home Rent, Car Loan EMI, SIP"
-              value={newFixedForm.name}
-              onChange={(e) => setNewFixedForm({ ...newFixedForm, name: e.target.value })}
-              className="input-text"
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Monthly Amount (₹)
-            </label>
-            <input
-              type="number"
-              value={newFixedForm.amountRupees}
-              onChange={(e) => setNewFixedForm({ ...newFixedForm, amountRupees: Number(e.target.value) })}
-              className="input-text"
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-              Due Day of the Month (1–31)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={31}
-              value={newFixedForm.dueDay}
-              onChange={(e) => setNewFixedForm({ ...newFixedForm, dueDay: Number(e.target.value) })}
-              className="input-text"
-            />
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

@@ -7,9 +7,10 @@
     "check:android": "scripts/check.sh --android",
     "mobile": "npm --prefix apps/mobile run start",
     "android": "npm --prefix apps/mobile run android",
-    "api": "dotnet run --project apps/api/src/PaisaPulse.Api",
+    "api": "npm --prefix apps/api-node run dev",
     "admin": "npm --prefix apps/admin run dev",
-    "admin:build": "npm --prefix apps/admin run build"
+    "admin:build": "npm --prefix apps/admin run build",
+    "api:start": "npm --prefix apps/api-node run build && npm --prefix apps/api-node run start"
   },
   "engines": {
     "node": ">=24.21.0 <25"

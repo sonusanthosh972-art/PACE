@@ -20,7 +20,7 @@ import { formatDayLabel } from '@/lib/format';
 import { ringTone, yesterdayLine, type RingTone } from '@/lib/today';
 import { refreshFromDevice } from '@/services/bootstrap';
 import { useImportStatus } from '@/state/importStatus';
-import { invalidateAll, useToday, type TodayData } from '@/state/queries';
+import { invalidateAll, useSettings, useToday, type TodayData } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { RADIUS, SPACE } from '@/theme/tokens';
 
@@ -35,6 +35,7 @@ export default function TodayScreen() {
   const today = useToday();
   const client = useQueryClient();
   const importing = useImportStatus((s) => s.importing);
+  const demoMode = useSettings().data?.demoMode ?? false;
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -74,9 +75,29 @@ export default function TodayScreen() {
           onAction={() => router.replace('/onboarding')}
         />
       ) : (
-        <TodayContent data={today.data} importing={importing} />
+        <>
+          {demoMode ? <SampleDataBanner /> : null}
+          <TodayContent data={today.data} importing={importing} />
+        </>
       )}
     </Screen>
+  );
+}
+
+function SampleDataBanner() {
+  return (
+    <Card
+      onPress={() => router.push('/settings/exit-sample')}
+      accessibilityLabel="You are looking at sample data. Opens the option to switch to your real bank SMS."
+    >
+      <View style={styles.row}>
+        <Icon name="flask-outline" color="amberText" />
+        <View style={styles.flex}>
+          <AppText variant="bodyStrong">You&apos;re viewing sample data</AppText>
+          <AppText color="muted">Tap to switch to your real bank SMS.</AppText>
+        </View>
+      </View>
+    </Card>
   );
 }
 

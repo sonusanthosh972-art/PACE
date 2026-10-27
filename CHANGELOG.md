@@ -1,5 +1,27 @@
 # Changelog
 
+## Backend consolidation: Node.js API + live admin (2026-10-27)
+
+### Removed
+- `apps/api` (.NET 10). `apps/api-node` is now the only backend (DECISIONS D29).
+
+### Fixed
+- Sync contract: `POST /api/v1/transactions/sync` returned `total`, but the app expects `totalProcessed`, so every sync failed in the app.
+- Admin endpoints were open to anyone on the network; they now require `x-admin-key` and are disabled without `ADMIN_API_KEY`.
+- CORS was fully open by default; it is now off unless `CORS_ORIGINS` lists origins.
+- Async route errors could crash the process (Express 4); upgraded to Express 5 with a problem-details error handler.
+- Insights and the nightly job used the server machine's timezone; they now use IST with the same rules as the app (refunds net off, fixed and excluded payments ignored).
+- Default database was `kailvarn`; it is `paisapulse` again.
+- Refresh-token rotation is atomic, so a replayed token is rejected; JWTs are pinned to HS256.
+- Sync input is validated against the app's schema (categories, modes, 64-hex dedupe hash, no unknown fields such as raw SMS text); `_id`/`userId` are no longer returned.
+- Admin stats are real (active users, average daily budget, DB latency, rate-limit hits) instead of hardcoded numbers.
+
+### Added
+- api-node test suite (15 tests, embedded MongoDB): auth, refresh rotation, user isolation, sync contract, profile, delete account, insights, nightly job, admin key.
+- Admin API: `/api/v1/admin/fixed-expenses` and `/api/v1/admin/summaries`.
+- Admin dashboard loads live users, transactions, fixed expenses, daily summaries, stats and health, with a banner when the API is unreachable.
+- `scripts/check.sh` runs api-node typecheck/tests/build and admin typecheck/lint instead of dotnet.
+
 ## Phase 7: Backend API (.NET 10 + MongoDB) (2026-10-26)
 
 ### Added

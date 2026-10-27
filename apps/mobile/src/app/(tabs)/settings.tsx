@@ -230,6 +230,14 @@ export default function SettingsScreen() {
 
       <SectionTitle>Your data</SectionTitle>
       <View style={styles.group}>
+        {s.demoMode ? (
+          <ListRow
+            icon="flask-outline"
+            title="Use my real data"
+            subtitle="Remove the sample payments and read your bank SMS"
+            onPress={() => router.push('/settings/exit-sample')}
+          />
+        ) : null}
         <ListRow
           icon="download-outline"
           title={exporting ? 'Preparing CSV…' : 'Export CSV'}

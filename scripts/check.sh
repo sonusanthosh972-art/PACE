@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Toolchain: Node from .nvmrc via nvm, .NET from ~/.dotnet if not already on PATH.
+# Toolchain: Node from .nvmrc via nvm.
 if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
   # shellcheck disable=SC1091
   . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
@@ -16,10 +16,6 @@ if [ "$(node -v)" != "$REQUIRED_NODE" ]; then
   echo "Node $REQUIRED_NODE required (found $(node -v)). Run: nvm install" >&2
   exit 1
 fi
-if [ -x "$HOME/.dotnet/dotnet" ]; then
-  export DOTNET_ROOT="$HOME/.dotnet" PATH="$HOME/.dotnet:$PATH"
-fi
-export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
 step() { printf '\n==> %s\n' "$*"; }
@@ -30,9 +26,14 @@ step "mobile: expo lint";     npx expo lint
 step "mobile: jest";          npx jest --ci
 step "mobile: expo-doctor";   npx expo-doctor
 
-cd "$ROOT/apps/api"
-step "api: dotnet build -warnaserror"; dotnet build -warnaserror --nologo
-step "api: dotnet test";               dotnet test --no-build
+cd "$ROOT/apps/api-node"
+step "api: typecheck";  npm run typecheck
+step "api: tests";      npm test
+step "api: build";      npm run build
+
+cd "$ROOT/apps/admin"
+step "admin: tsc --noEmit"; npx tsc --noEmit
+step "admin: eslint";       npx eslint src
 
 if [ "${1:-}" = "--android" ]; then
   cd "$ROOT/apps/mobile"

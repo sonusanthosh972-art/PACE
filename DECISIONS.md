@@ -182,3 +182,19 @@ breach does not expose usable refresh tokens to attackers.
 `JWT_SECRET` must be at least 32 characters and never has a hardcoded fallback value; missing secrets abort startup
 immediately with actionable messages. MongoDB index initialization is mandatory: failure to create the indexes (including
 the deduplication index) aborts startup immediately rather than running degraded.
+
+## D29. Node.js API replaces the .NET API
+
+`apps/api` (.NET 10) was removed; `apps/api-node` (Express 5 + MongoDB driver, TypeScript strict) is the only
+backend, so the whole repo is one language and one toolchain. It keeps the same `/api/v1` contract the mobile app
+uses, with one shared IST budget-rule module (`src/domain.ts`, a copy of the mobile rules) for insights and the
+nightly job (`node-cron` at 00:00 Asia/Kolkata replaces Hangfire). Default database stays `paisapulse`.
+D7 (.NET test runner), D26 (Hangfire) and the .NET rows in D1 no longer apply. Tests use
+`mongodb-memory-server` (embedded mongod, no Docker), replacing Mongo2Go (D24).
+
+## D30. Admin dashboard talks to the API through a server-side key
+
+The admin app (`apps/admin`, Next.js) calls `/api/v1/admin/*` only from its own server routes, sending
+`x-admin-key: ADMIN_API_KEY`. The key is never shipped to the browser. Without `ADMIN_API_KEY` the API disables the
+admin endpoints (503) instead of leaving them open. The dashboard shows a banner whenever it falls back to sample
+data, and edits made in the dashboard are labelled "this view only" because the admin API is read-only.

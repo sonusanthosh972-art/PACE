@@ -36,8 +36,6 @@ apps/mobile/ios/
 .kotlin/
 local.properties
 
-# --- .NET ---
-bin/
-obj/
-TestResults/
-*.user
+# --- Next.js (apps/admin) ---
+.next/
+next-env.d.ts

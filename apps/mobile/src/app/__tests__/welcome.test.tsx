@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import Welcome from '../onboarding/index';
+import { useAuthStore } from '@/state/authStore';
 
 // Skia's Jest mock has no font support; the logo is native graphics, so stand it in.
 jest.mock('@/components/brand/PaceLogo', () => {
@@ -45,15 +46,39 @@ describe('Welcome (landing)', () => {
     expect(screen.getByLabelText('Example: ₹1,279 left today of ₹1,579')).toBeOnTheScreen();
   });
 
-  it('starts onboarding from the primary button', async () => {
+  it('starts with account creation as the primary step', async () => {
     await renderWelcome();
-    await fireEvent.press(screen.getByRole('button', { name: 'Get started' }));
-    expect(mockPush).toHaveBeenCalledWith('/onboarding/salary');
+    await fireEvent.press(screen.getByRole('button', { name: 'Create account' }));
+    expect(mockPush).toHaveBeenCalledWith('/settings/auth?mode=register');
   });
 
   it('opens sign in from the welcome screen', async () => {
     await renderWelcome();
-    await fireEvent.press(screen.getByRole('button', { name: 'Sign in / Sign up' }));
-    expect(mockPush).toHaveBeenCalledWith('/settings/auth');
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+    expect(mockPush).toHaveBeenCalledWith('/settings/auth?mode=login');
+  });
+
+  it('offers a no-account setup and a clearly optional sample tour', async () => {
+    await renderWelcome();
+    await fireEvent.press(screen.getByRole('button', { name: 'Use without account' }));
+    expect(mockPush).toHaveBeenCalledWith('/onboarding/salary');
+    expect(screen.getByRole('button', { name: 'Try sample data' })).toBeOnTheScreen();
+  });
+
+  it('never offers sample data once signed in', async () => {
+    useAuthStore.setState({ isAuthenticated: true });
+    try {
+      await renderWelcome();
+      // Let the biometrics check on mount settle before asserting.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(screen.queryByRole('button', { name: 'Try sample data' })).toBeNull();
+      await fireEvent.press(screen.getByRole('button', { name: 'Continue setup' }));
+      expect(mockPush).toHaveBeenCalledWith('/onboarding/salary');
+    } finally {
+      screen.unmount();
+      useAuthStore.setState({ isAuthenticated: false });
+    }
   });
 });

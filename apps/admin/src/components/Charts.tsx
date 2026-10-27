@@ -135,13 +135,10 @@ interface CategorySlice {
 
 export function CategoryDonut({ data }: { data: CategorySlice[] }) {
   const total = data.reduce((sum, d) => sum + d.amountPaise, 0) || 1;
-  let accumulatedAngle = 0;
-
-  const slices = data.map((d) => {
+  const slices = data.map((d, i) => {
     const fraction = d.amountPaise / total;
     const angle = fraction * 360;
-    const startAngle = accumulatedAngle;
-    accumulatedAngle += angle;
+    const startAngle = data.slice(0, i).reduce((sum, prev) => sum + (prev.amountPaise / total) * 360, 0);
     return {
       ...d,
       fraction,

@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   ShieldAlert,
   Sparkles,
-  ArrowRight,
   Copy,
   Check,
 } from 'lucide-react';

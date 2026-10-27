@@ -5,9 +5,7 @@ import type { TabType } from '../lib/types';
 import {
   Menu,
   Search,
-  Bell,
   RefreshCw,
-  Plus,
   Download,
   Terminal,
 } from 'lucide-react';
@@ -17,7 +15,7 @@ interface HeaderProps {
   onOpenMobileSidebar: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
-  onQuickAction: (action: 'add_tx' | 'add_rule' | 'add_fixed' | 'sandbox' | 'export') => void;
+  onQuickAction: (action: 'sandbox' | 'export') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }
@@ -153,19 +151,6 @@ export function Header({
         >
           <Terminal size={14} />
           <span>Parser Tester</span>
-        </button>
-
-        {/* Quick Add Button */}
-        <button
-          onClick={() => {
-            if (activeTab === 'rules') onQuickAction('add_rule');
-            else if (activeTab === 'fixed-expenses') onQuickAction('add_fixed');
-            else onQuickAction('add_tx');
-          }}
-          className="btn btn-primary btn-sm"
-        >
-          <Plus size={14} />
-          <span>New Entry</span>
         </button>
 
         {/* Export Button */}

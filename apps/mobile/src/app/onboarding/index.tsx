@@ -18,16 +18,14 @@ import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { getAppDb } from '@/data/appDb';
-import { setSetting } from '@/data/settingsRepo';
 import {
   authenticateWithBiometrics,
   checkBiometrics,
   getBiometricCredentials,
 } from '@/services/biometrics';
+import { completeAccountFlow } from '@/services/accountFlow';
 import { systemClock } from '@/services/clock';
 import { loadDemoData } from '@/services/demo';
-import { restoreFromServer } from '@/services/restore';
-import { syncNow } from '@/services/sync';
 import { useAuthStore } from '@/state/authStore';
 import { invalidateAll } from '@/state/queries';
 import { useSplash } from '@/state/splashStore';
@@ -51,6 +49,7 @@ export default function Welcome() {
   const { width: screenWidth } = useWindowDimensions();
   const client = useQueryClient();
   const login = useAuthStore((s) => s.login);
+  const signedIn = useAuthStore((s) => s.isAuthenticated);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const splashGone = useSplash((s) => s.dismissed);
@@ -72,7 +71,9 @@ export default function Welcome() {
 
   const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
 
+  /** Sample data is only ever loaded when the user explicitly asks for it, and never on an account. */
   const tryDemo = async () => {
+    if (signedIn) return;
     setLoadingDemo(true);
     try {
       await loadDemoData(await getAppDb(), systemClock);
@@ -91,20 +92,15 @@ export default function Welcome() {
 
       const creds = await getBiometricCredentials();
       if (!creds) {
-        router.push('/settings/auth');
+        router.push('/settings/auth?mode=login');
         return;
       }
 
-      await login(creds.email, creds.password);
-      const db = await getAppDb();
-      try {
-        await restoreFromServer(db);
-      } catch {
-        await syncNow(db);
-      }
-      await setSetting(db, 'onboardingComplete', true);
+      const next = await completeAccountFlow(await getAppDb(), 'login', () =>
+        login(creds.email, creds.password),
+      );
       await invalidateAll(client);
-      router.replace('/(tabs)');
+      router.replace(next);
     } finally {
       setUnlocking(false);
     }
@@ -118,37 +114,58 @@ export default function Welcome() {
           entering={reducedMotion ? FadeIn.duration(200) : FadeIn.duration(400).delay(300)}
           style={styles.actions}
         >
-          <Button
-            label="Get started"
-            icon="arrow-forward"
-            onPress={() => router.push('/onboarding/salary')}
-            accessibilityHint="Set up your daily budget in about two minutes"
-          />
-          {hasBiometrics && hasSavedCreds ? (
+          {signedIn ? (
             <Button
-              label={`Quick unlock with ${biometryName}`}
-              variant="secondary"
-              icon="finger-print-outline"
-              loading={unlocking}
-              onPress={onQuickUnlock}
-              accessibilityHint={`Unlock instantly with your ${biometryName}`}
+              label="Continue setup"
+              icon="arrow-forward"
+              onPress={() => router.push('/onboarding/salary')}
+              accessibilityHint="Set up your budget, then allow bank SMS"
             />
           ) : (
-            <Button
-              label="Sign in / Sign up"
-              variant="secondary"
-              icon="person-circle-outline"
-              onPress={() => router.push('/settings/auth')}
-              accessibilityHint="Sign in to your account or create a new one"
-            />
+            <>
+              <Button
+                label="Create account"
+                icon="person-add-outline"
+                onPress={() => router.push('/settings/auth?mode=register')}
+                accessibilityHint="Create an account, set up your budget, then read your bank SMS"
+              />
+              {hasBiometrics && hasSavedCreds ? (
+                <Button
+                  label={`Sign in with ${biometryName}`}
+                  variant="secondary"
+                  icon="finger-print-outline"
+                  loading={unlocking}
+                  onPress={onQuickUnlock}
+                  accessibilityHint={`Sign in instantly with your ${biometryName}`}
+                />
+              ) : (
+                <Button
+                  label="Sign in"
+                  variant="secondary"
+                  icon="log-in-outline"
+                  onPress={() => router.push('/settings/auth?mode=login')}
+                  accessibilityHint="Sign in and restore your budget and transactions"
+                />
+              )}
+              <View style={styles.secondaryActions}>
+                <Button
+                  label="Use without account"
+                  variant="ghost"
+                  compact
+                  onPress={() => router.push('/onboarding/salary')}
+                  accessibilityHint="Set up on this phone only. You can sign in later from Settings"
+                />
+                <Button
+                  label="Try sample data"
+                  variant="ghost"
+                  compact
+                  onPress={tryDemo}
+                  loading={loadingDemo}
+                  accessibilityHint="Shows example payments so you can look around. Nothing is real or saved to a server"
+                />
+              </View>
+            </>
           )}
-          <Button
-            label="Explore with sample data"
-            variant="ghost"
-            onPress={tryDemo}
-            loading={loadingDemo}
-            accessibilityHint="Fills the app with example payments so you can look around first"
-          />
         </Animated.View>
       }
     >
@@ -277,6 +294,7 @@ function TodayPreview({ animate }: { animate: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  secondaryActions: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.sm },
   hero: {
     alignItems: 'center',
     justifyContent: 'center',

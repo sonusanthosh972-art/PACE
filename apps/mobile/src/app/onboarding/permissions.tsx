@@ -15,8 +15,12 @@ import {
   type PermissionKind,
   type PermissionState,
 } from '@/lib/permissions';
+import { getAppDb } from '@/data/appDb';
+import { getProfile } from '@/data/profileRepo';
 import { saveBudgetSetup, updateSetting } from '@/services/actions';
 import { refreshFromDevice } from '@/services/bootstrap';
+import { syncNow } from '@/services/sync';
+import { useAuthStore } from '@/state/authStore';
 import { useImportStatus } from '@/state/importStatus';
 import { useOnboarding } from '@/state/onboardingStore';
 import { invalidateAll } from '@/state/queries';
@@ -34,6 +38,7 @@ const STATE_LABEL: Record<PermissionState, string> = {
 export default function PermissionsStep() {
   const client = useQueryClient();
   const draft = useOnboarding();
+  const signedIn = useAuthStore((s) => s.isAuthenticated);
   const setImporting = useImportStatus((s) => s.setImporting);
   const [states, setStates] = useState<Record<PermissionKind, PermissionState> | null>(null);
   const [finishing, setFinishing] = useState(false);
@@ -56,21 +61,28 @@ export default function PermissionsStep() {
   );
 
   const finish = async () => {
-    if (!draft.salaryPaise) {
-      router.replace('/onboarding/salary');
-      return;
-    }
     setFinishing(true);
     setError(null);
     try {
-      await saveBudgetSetup(
-        {
-          monthlySalaryPaise: draft.salaryPaise,
-          payday: draft.payday,
-          monthlySavingsGoalPaise: draft.savingsGoalPaise ?? 0,
-        },
-        draft.fixedExpenses,
-      );
+      if (draft.salaryPaise) {
+        await saveBudgetSetup(
+          {
+            monthlySalaryPaise: draft.salaryPaise,
+            payday: draft.payday,
+            monthlySavingsGoalPaise: draft.savingsGoalPaise ?? 0,
+          },
+          draft.fixedExpenses,
+        );
+      } else {
+        // Signed in on a new phone: the budget was restored from the server, so only the
+        // permissions step remains. Without either, setup must start from the salary step.
+        const restored = await getProfile(await getAppDb());
+        if (!restored || restored.monthlySalaryPaise <= 0) {
+          setFinishing(false);
+          router.replace('/onboarding/salary');
+          return;
+        }
+      }
       await updateSetting('onboardingComplete', true);
       await invalidateAll(client);
       router.dismissAll();
@@ -82,6 +94,8 @@ export default function PermissionsStep() {
         .finally(() => {
           setImporting(false);
           invalidateAll(client).catch(() => undefined);
+          // Back up the imported payments right away when signed in.
+          syncNow().catch(() => undefined);
         });
     } catch {
       setError('Could not save your budget. Please try again.');
@@ -114,8 +128,9 @@ export default function PermissionsStep() {
           <View style={styles.flex}>
             <AppText variant="bodyStrong">The Paisa Pulse Privacy Pledge</AppText>
             <AppText variant="caption" color="muted">
-              Zero advertisements. Zero server uploads. Only bank transaction amounts are read. Your
-              personal life remains strictly yours.
+              {signedIn
+                ? 'No ads. Only messages from banks are read, and their text never leaves this phone. Only amounts, merchants and dates are backed up to your account.'
+                : 'No ads. Only messages from banks are read, and nothing leaves this phone.'}
             </AppText>
           </View>
         </View>

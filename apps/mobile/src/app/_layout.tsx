@@ -141,6 +141,10 @@ function ThemedStack() {
           name="settings/delete-data"
           options={{ headerShown: true, title: 'Delete all my data' }}
         />
+        <Stack.Screen
+          name="settings/exit-sample"
+          options={{ headerShown: true, title: 'Use my real data' }}
+        />
       </Stack>
     </>
   );

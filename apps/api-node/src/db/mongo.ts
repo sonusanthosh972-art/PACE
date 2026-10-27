@@ -3,15 +3,8 @@ import { MongoClient, Db } from 'mongodb';
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
-export async function connectDb(): Promise<Db> {
+export async function connectDb(mongoUri: string, dbName: string): Promise<Db> {
   if (db) return db;
-
-  const mongoUri = process.env.MONGODB_URI;
-  if (!mongoUri) {
-    throw new Error('MONGODB_URI is not set in environment variables');
-  }
-
-  const dbName = process.env.MONGODB_DATABASE || 'kailvarn';
 
   client = new MongoClient(mongoUri);
   await client.connect();
@@ -21,6 +14,12 @@ export async function connectDb(): Promise<Db> {
   await initIndexes(db);
 
   return db;
+}
+
+export async function closeDb(): Promise<void> {
+  await client?.close();
+  client = null;
+  db = null;
 }
 
 export function getDb(): Db {
@@ -43,6 +42,11 @@ export async function pingDb(): Promise<boolean> {
 async function initIndexes(database: Db) {
   // 1. users: unique email
   await database.collection('users').createIndex({ email: 1 }, { unique: true, name: 'ux_users_email' });
+  await database.collection('users').createIndex({ id: 1 }, { unique: true, name: 'ux_users_id' });
+  await database.collection('users').createIndex(
+    { refreshTokenHash: 1 },
+    { name: 'ix_users_refreshTokenHash', partialFilterExpression: { refreshTokenHash: { $type: 'string' } } }
+  );
 
   // 2. fixedExpenses: index on userId
   await database.collection('fixedExpenses').createIndex({ userId: 1 }, { name: 'ix_fixedExpenses_userId' });

@@ -1,162 +1,113 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'node:crypto';
-import { AuthenticatedRequest, requireAuth } from '../middleware/auth.js';
+import { AuthenticatedRequest, requireAuth, userIdOf } from '../middleware/auth.js';
 import { getDb } from '../db/mongo.js';
 import { UserDoc, FixedExpenseDoc } from '../db/models.js';
+import { problem, validationProblem } from '../http.js';
+import { toProfileDto } from './auth.js';
 
 export const meRouter = Router();
 meRouter.use(requireAuth);
 
+const MAX_PAISE = Number.MAX_SAFE_INTEGER;
+
 const updateProfileSchema = z.object({
-  name: z.string().optional(),
-  salaryPaise: z.number().int().nonnegative(),
+  name: z.string().trim().min(1).max(100).optional(),
+  salaryPaise: z.number().int().nonnegative().max(MAX_PAISE),
   payday: z.number().int().min(1).max(31),
-  savingsGoalPaise: z.number().int().nonnegative(),
-  timezone: z.string().optional(),
+  savingsGoalPaise: z.number().int().nonnegative().max(MAX_PAISE),
+  timezone: z.string().trim().min(1).max(64).optional(),
 });
 
-const fixedExpenseItemSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1),
-  amountPaise: z.number().int().positive(),
-  dueDay: z.number().int().min(1).max(31),
-});
+const fixedExpensesSchema = z
+  .array(
+    z.object({
+      id: z.string().trim().min(1).max(64).optional(),
+      name: z.string().trim().min(1).max(80),
+      amountPaise: z.number().int().positive().max(MAX_PAISE),
+      dueDay: z.number().int().min(1).max(31),
+    }),
+  )
+  .max(50);
+
+function toFixedExpenseDto(i: FixedExpenseDoc) {
+  return { id: i.id, name: i.name, amountPaise: i.amountPaise, dueDay: i.dueDay };
+}
 
 // GET /api/v1/me/profile
 meRouter.get('/profile', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const db = getDb();
-  const user = await db.collection<UserDoc>('users').findOne({ id: req.userId });
+  const user = await getDb().collection<UserDoc>('users').findOne({ id: userIdOf(req) });
   if (!user) {
-    res.status(404).json({ status: 404, title: 'User not found' });
+    problem(res, 404, 'User not found');
     return;
   }
-
-  res.status(200).json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    salaryPaise: user.salaryPaise ?? 0,
-    payday: user.payday ?? 1,
-    savingsGoalPaise: user.savingsGoalPaise ?? 0,
-    timezone: user.timezone || 'Asia/Kolkata',
-  });
+  res.status(200).json(toProfileDto(user));
 });
 
 // PUT /api/v1/me/profile
 meRouter.put('/profile', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const parse = updateProfileSchema.safeParse(req.body);
   if (!parse.success) {
-    res.status(400).json({
-      title: 'One or more validation errors occurred.',
-      status: 400,
-      errors: parse.error.flatten().fieldErrors,
-    });
+    validationProblem(res, parse.error);
     return;
   }
 
-  const { name, salaryPaise, payday, savingsGoalPaise, timezone } = parse.data;
-  const db = getDb();
-  const updateDoc: any = {
-    salaryPaise,
-    payday,
-    savingsGoalPaise,
-    updatedAt: new Date(),
-  };
-  if (name !== undefined) updateDoc.name = name.trim();
-  if (timezone !== undefined) updateDoc.timezone = timezone.trim();
+  const { name, timezone, ...budget } = parse.data;
+  const set: Partial<UserDoc> = { ...budget, updatedAt: new Date() };
+  if (name !== undefined) set.name = name;
+  if (timezone !== undefined) set.timezone = timezone;
 
-  const result = await db.collection<UserDoc>('users').findOneAndUpdate(
-    { id: req.userId },
-    { $set: updateDoc },
-    { returnDocument: 'after' }
-  );
-
-  const updated = result as unknown as UserDoc | null;
+  const updated = await getDb()
+    .collection<UserDoc>('users')
+    .findOneAndUpdate({ id: userIdOf(req) }, { $set: set }, { returnDocument: 'after' });
   if (!updated) {
-    res.status(404).json({ status: 404, title: 'User not found' });
+    problem(res, 404, 'User not found');
     return;
   }
-
-  res.status(200).json({
-    id: updated.id,
-    email: updated.email,
-    name: updated.name,
-    salaryPaise: updated.salaryPaise ?? 0,
-    payday: updated.payday ?? 1,
-    savingsGoalPaise: updated.savingsGoalPaise ?? 0,
-    timezone: updated.timezone || 'Asia/Kolkata',
-  });
+  res.status(200).json(toProfileDto(updated));
 });
 
 // GET /api/v1/me/fixed-expenses
 meRouter.get('/fixed-expenses', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const db = getDb();
-  const items = await db
+  const items = await getDb()
     .collection<FixedExpenseDoc>('fixedExpenses')
-    .find({ userId: req.userId })
+    .find({ userId: userIdOf(req) })
     .sort({ dueDay: 1 })
     .toArray();
-
-  res.status(200).json(
-    items.map((i) => ({
-      id: i.id,
-      name: i.name,
-      amountPaise: i.amountPaise,
-      dueDay: i.dueDay,
-    }))
-  );
+  res.status(200).json(items.map(toFixedExpenseDto));
 });
 
-// PUT /api/v1/me/fixed-expenses
+// PUT /api/v1/me/fixed-expenses — replaces the whole list
 meRouter.put('/fixed-expenses', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const rawList = Array.isArray(req.body) ? req.body : [];
-  const parsedList: any[] = [];
-
-  for (const item of rawList) {
-    const parse = fixedExpenseItemSchema.safeParse(item);
-    if (!parse.success) {
-      res.status(400).json({
-        title: 'One or more validation errors occurred.',
-        status: 400,
-        errors: parse.error.flatten().fieldErrors,
-      });
-      return;
-    }
-    parsedList.push(parse.data);
+  const parse = fixedExpensesSchema.safeParse(req.body);
+  if (!parse.success) {
+    validationProblem(res, parse.error);
+    return;
   }
 
-  const db = getDb();
-  const collection = db.collection<FixedExpenseDoc>('fixedExpenses');
-
-  const domainItems: FixedExpenseDoc[] = parsedList.map((i) => ({
-    id: i.id || crypto.randomUUID().replace(/-/g, ''),
-    userId: req.userId!,
-    name: i.name.trim(),
+  const userId = userIdOf(req);
+  const now = Date.now();
+  const docs: FixedExpenseDoc[] = parse.data.map((i) => ({
+    id: i.id ?? crypto.randomUUID().replace(/-/g, ''),
+    userId,
+    name: i.name,
     amountPaise: i.amountPaise,
     dueDay: i.dueDay,
-    createdAt: Date.now(),
+    createdAt: now,
   }));
 
-  await collection.deleteMany({ userId: req.userId });
-  if (domainItems.length > 0) {
-    await collection.insertMany(domainItems as any);
-  }
+  const collection = getDb().collection<FixedExpenseDoc>('fixedExpenses');
+  await collection.deleteMany({ userId });
+  if (docs.length > 0) await collection.insertMany(docs);
 
-  res.status(200).json(
-    domainItems.map((i) => ({
-      id: i.id,
-      name: i.name,
-      amountPaise: i.amountPaise,
-      dueDay: i.dueDay,
-    }))
-  );
+  res.status(200).json(docs.map(toFixedExpenseDto));
 });
 
-// DELETE /api/v1/me
+// DELETE /api/v1/me — deletes the account and every record it owns
 meRouter.delete('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = getDb();
-  const userId = req.userId!;
+  const userId = userIdOf(req);
 
   await Promise.all([
     db.collection('fixedExpenses').deleteMany({ userId }),
@@ -167,9 +118,8 @@ meRouter.delete('/', async (req: AuthenticatedRequest, res: Response): Promise<v
 
   const result = await db.collection('users').deleteOne({ id: userId });
   if (result.deletedCount === 0) {
-    res.status(404).json({ status: 404, title: 'User not found' });
+    problem(res, 404, 'User not found');
     return;
   }
-
   res.status(204).send();
 });

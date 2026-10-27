@@ -104,3 +104,11 @@ export async function deleteAllData(): Promise<void> {
   await setBiometricEnabled(false);
   await wipeAllLocalData(await getAppDb());
 }
+
+/**
+ * Leaves "Explore with sample data": removes the sample payments and setup from this phone only,
+ * so onboarding can start again with the real bank SMS. Sign-in and server data are untouched.
+ */
+export async function exitSampleData(): Promise<void> {
+  await wipeAllLocalData(await getAppDb());
+}
