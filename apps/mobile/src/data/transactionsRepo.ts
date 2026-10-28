@@ -363,8 +363,53 @@ export async function setExcluded(
   );
 }
 
-export async function deleteTransaction(db: SqlDb, id: string): Promise<void> {
-  await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+/** Deletes a payment and remembers it, so the delete syncs and the payment never comes back. */
+export async function deleteTransaction(db: SqlDb, id: string, clock: Clock): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const row = await db.getFirstAsync<{ dedupe_hash: string }>(
+      'SELECT dedupe_hash FROM transactions WHERE id = ?',
+      [id],
+    );
+    if (!row) return;
+    await db.runAsync(
+      `INSERT OR REPLACE INTO deleted_transactions (dedupe_hash, deleted_at, sync_state)
+       VALUES (?, ?, 'pending')`,
+      [row.dedupe_hash, clock.now()],
+    );
+    await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+  });
+}
+
+export async function isDeleted(db: SqlDb, dedupeHash: string): Promise<boolean> {
+  return (
+    (await db.getFirstAsync<{ one: number }>(
+      'SELECT 1 AS one FROM deleted_transactions WHERE dedupe_hash = ?',
+      [dedupeHash],
+    )) !== null
+  );
+}
+
+export interface PendingDelete {
+  dedupeHash: string;
+  deletedAt: number;
+}
+
+export async function pendingDeletes(db: SqlDb, limit = 200): Promise<PendingDelete[]> {
+  const rows = await db.getAllAsync<{ dedupe_hash: string; deleted_at: number }>(
+    `SELECT dedupe_hash, deleted_at FROM deleted_transactions WHERE sync_state = 'pending'
+     ORDER BY deleted_at LIMIT ?`,
+    [limit],
+  );
+  return rows.map((r) => ({ dedupeHash: r.dedupe_hash, deletedAt: r.deleted_at }));
+}
+
+export async function markDeletesSynced(db: SqlDb, hashes: readonly string[]): Promise<void> {
+  if (hashes.length === 0) return;
+  await db.runAsync(
+    `UPDATE deleted_transactions SET sync_state = 'synced'
+     WHERE dedupe_hash IN (${hashes.map(() => '?').join(', ')})`,
+    [...hashes],
+  );
 }
 
 export async function pendingSync(db: SqlDb, limit = 200): Promise<Transaction[]> {

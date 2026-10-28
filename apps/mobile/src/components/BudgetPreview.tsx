@@ -4,6 +4,7 @@ import {
   computeTodayBudget,
   cycleFor,
   daysLeftInCycle,
+  poolForCycle,
   spendableForCycle,
   type BudgetProfile,
 } from '@/domain/budget';
@@ -25,8 +26,9 @@ export function BudgetPreview({ profile }: { profile: BudgetProfile }) {
     spentBeforeTodayPaise: 0,
     daysLeft: cycle.totalDays,
   });
+  // Before setup there is no start date yet: setting up today prorates this cycle from today.
   const fromToday = computeTodayBudget({
-    spendablePaise: spendable,
+    spendablePaise: poolForCycle({ ...profile, startDate: profile.startDate ?? today }, cycle),
     spentBeforeTodayPaise: 0,
     daysLeft: daysLeftInCycle(today, cycle),
   });
@@ -56,7 +58,7 @@ export function BudgetPreview({ profile }: { profile: BudgetProfile }) {
           </AppText>
           <AppText variant="caption" color="muted" tabular>
             {formatINRWhole(spendable)} a month to spend
-            {fromToday !== perDay
+            {formatINRWhole(fromToday) !== formatINRWhole(perDay)
               ? ` · ${formatINRWhole(fromToday)}/day for the rest of this cycle`
               : ''}
           </AppText>

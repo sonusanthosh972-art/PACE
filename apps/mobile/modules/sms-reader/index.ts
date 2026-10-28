@@ -45,9 +45,15 @@ export async function readBankSms(sinceMs: number): Promise<PendingItem[]> {
   return validItems(await NativeSmsReader.readBankSmsAsync(sinceMs));
 }
 
-export async function drainPending(): Promise<PendingItem[]> {
+/** Live items queued natively. They stay queued until acknowledged with `ackPending`. */
+export async function peekPending(): Promise<PendingItem[]> {
   if (!NativeSmsReader) return [];
-  return validItems(await NativeSmsReader.drainPendingAsync());
+  return validItems(await NativeSmsReader.peekPendingAsync());
+}
+
+/** Removes queued items up to and including `upToSeq`; call only after they are stored. */
+export async function ackPending(upToSeq: number): Promise<void> {
+  await NativeSmsReader?.ackPendingAsync(upToSeq);
 }
 
 export async function clearPending(): Promise<void> {

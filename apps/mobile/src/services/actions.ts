@@ -26,7 +26,7 @@ import { transactionsToCsv } from '@/lib/format';
 import { clearTokens } from './api/tokens';
 import { setBiometricEnabled } from './biometrics';
 import { systemClock } from './clock';
-import { onNewTransactions } from './liveEvents';
+import { onLocalChange, onNewTransactions } from './liveEvents';
 
 export async function addManualTransaction(entry: ManualEntry): Promise<Transaction> {
   const db = await getAppDb();
@@ -36,15 +36,22 @@ export async function addManualTransaction(entry: ManualEntry): Promise<Transact
 }
 
 export async function recategoriseTransaction(id: string, category: CategoryId): Promise<number> {
-  return recategorise(await getAppDb(), id, category, systemClock);
+  const db = await getAppDb();
+  const changed = await recategorise(db, id, category, systemClock);
+  onLocalChange(db);
+  return changed;
 }
 
 export async function setTransactionExcluded(id: string, excluded: boolean): Promise<void> {
-  await setExcluded(await getAppDb(), id, excluded, systemClock);
+  const db = await getAppDb();
+  await setExcluded(db, id, excluded, systemClock);
+  onLocalChange(db);
 }
 
 export async function removeTransaction(id: string): Promise<void> {
-  await deleteTransaction(await getAppDb(), id);
+  const db = await getAppDb();
+  await deleteTransaction(db, id, systemClock);
+  onLocalChange(db);
 }
 
 /** Saves salary/payday/savings and fixed expenses; today's frozen budget is recomputed. */
@@ -56,6 +63,7 @@ export async function saveBudgetSetup(
   await saveProfile(db, profile, systemClock);
   if (fixedExpenses) await replaceFixedExpenses(db, fixedExpenses, systemClock);
   await clearBudgetsFrom(db, toDateKey(Date.now()));
+  onLocalChange(db);
 }
 
 export async function updateSetting<K extends keyof Settings>(

@@ -22,11 +22,12 @@ import { getProfile } from '@/data/profileRepo';
 import { getSettings, markOnce } from '@/data/settingsRepo';
 import { listTransactions } from '@/data/transactionsRepo';
 import {
+  budgetStartInCycle,
   computeTodayBudget,
   countsAsSpend,
   cycleFor,
   daysLeftInCycle,
-  spendableForCycle,
+  poolForCycle,
   totalSpend,
   type BudgetProfile,
   type BudgetSnapshot,
@@ -272,13 +273,13 @@ async function computeProjectedBudget(
   const cycle = cycleFor(targetDay, profile.payday);
   const spentBefore = totalSpend(
     await listTransactions(db, {
-      from: startOfDayMs(cycle.start),
+      from: startOfDayMs(budgetStartInCycle(cycle, profile.startDate)),
       to: startOfDayMs(targetDay),
       limit: 100_000,
     }),
   );
   return computeTodayBudget({
-    spendablePaise: spendableForCycle(profile),
+    spendablePaise: poolForCycle(profile, cycle),
     spentBeforeTodayPaise: spentBefore,
     daysLeft: daysLeftInCycle(targetDay, cycle),
   });

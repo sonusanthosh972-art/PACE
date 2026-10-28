@@ -1,8 +1,10 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
-const BIOMETRIC_CREDENTIALS_KEY = 'paisapulse_biometric_creds';
+/** Older versions saved the email + password here; it is deleted on start and never written. */
+const LEGACY_CREDENTIALS_KEY = 'paisapulse_biometric_creds';
 const BIOMETRIC_ENABLED_KEY = 'paisapulse_biometric_enabled';
+const LAST_EMAIL_KEY = 'paisapulse_last_email';
 
 // In-memory fallback if SecureStore is unavailable in a test environment
 const memoryFallback = new Map<string, string>();
@@ -42,13 +44,15 @@ async function deleteSecureItem(key: string): Promise<void> {
 export interface BiometricStatus {
   hasHardware: boolean;
   isEnrolled: boolean;
+  /** The phone has a screen lock (PIN, pattern, password or biometrics) the app can ask for. */
+  deviceSecure: boolean;
   supportedTypes: LocalAuthentication.AuthenticationType[];
   biometryName: string;
 }
 
 /**
- * Checks whether the device hardware supports biometric authentication (fingerprint/face)
- * and whether the user has at least one biometric enrolled.
+ * Checks whether the device supports biometric authentication (fingerprint/face), whether one is
+ * enrolled, and whether the phone has any screen lock at all (enough to unlock with the PIN).
  */
 export async function checkBiometrics(): Promise<BiometricStatus> {
   try {
@@ -57,6 +61,7 @@ export async function checkBiometrics(): Promise<BiometricStatus> {
     const supportedTypes = hasHardware
       ? await LocalAuthentication.supportedAuthenticationTypesAsync()
       : [];
+    const level = await LocalAuthentication.getEnrolledLevelAsync();
 
     let biometryName = 'Biometrics';
     if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
@@ -68,6 +73,7 @@ export async function checkBiometrics(): Promise<BiometricStatus> {
     return {
       hasHardware,
       isEnrolled,
+      deviceSecure: level !== LocalAuthentication.SecurityLevel.NONE,
       supportedTypes,
       biometryName,
     };
@@ -75,6 +81,7 @@ export async function checkBiometrics(): Promise<BiometricStatus> {
     return {
       hasHardware: false,
       isEnrolled: false,
+      deviceSecure: false,
       supportedTypes: [],
       biometryName: 'Biometrics',
     };
@@ -82,19 +89,20 @@ export async function checkBiometrics(): Promise<BiometricStatus> {
 }
 
 /**
- * Prompts the native Android/iOS biometric prompt.
+ * Asks the phone to confirm it is the owner: fingerprint/face when enrolled, otherwise (or as the
+ * fallback) the phone's own PIN, pattern or password. False when the phone has no screen lock.
  */
 export async function authenticateWithBiometrics(
   promptMessage = 'Unlock Paisa Pulse',
 ): Promise<boolean> {
   try {
     const status = await checkBiometrics();
-    if (!status.hasHardware || !status.isEnrolled) return false;
+    if (!status.deviceSecure) return false;
 
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,
       cancelLabel: 'Cancel',
-      fallbackLabel: 'Use password',
+      fallbackLabel: 'Use phone PIN',
       disableDeviceFallback: false,
     });
 
@@ -105,50 +113,31 @@ export async function authenticateWithBiometrics(
 }
 
 /**
- * Saves encrypted user credentials for instant biometric sign-in.
- */
-export async function saveBiometricCredentials(email: string, password: string): Promise<void> {
-  await setSecureItem(BIOMETRIC_CREDENTIALS_KEY, JSON.stringify({ email, password }));
-  await setSecureItem(BIOMETRIC_ENABLED_KEY, 'true');
-}
-
-/**
- * Retrieves the stored credentials if biometric sign-in is enabled.
- */
-export async function getBiometricCredentials(): Promise<{
-  email: string;
-  password: string;
-} | null> {
-  const enabled = await getSecureItem(BIOMETRIC_ENABLED_KEY);
-  if (enabled !== 'true') return null;
-  const raw = await getSecureItem(BIOMETRIC_CREDENTIALS_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Returns whether biometric quick-unlock is enabled.
+ * Whether the app lock is on. Unset means on when the phone has a screen lock to unlock with.
  */
 export async function isBiometricEnabled(): Promise<boolean> {
   const enabled = await getSecureItem(BIOMETRIC_ENABLED_KEY);
   if (enabled === 'false') return false;
-  if (enabled === 'true') return true;
   const status = await checkBiometrics();
-  return status.hasHardware && status.isEnrolled;
+  if (!status.deviceSecure) return false; // nothing to unlock with: never lock the user out
+  return true;
 }
 
-/**
- * Toggles biometric unlock.
- */
+/** Turns the app lock on or off. */
 export async function setBiometricEnabled(enabled: boolean): Promise<void> {
-  if (!enabled) {
-    await deleteSecureItem(BIOMETRIC_CREDENTIALS_KEY);
-    await setSecureItem(BIOMETRIC_ENABLED_KEY, 'false');
-  } else {
-    await setSecureItem(BIOMETRIC_ENABLED_KEY, 'true');
-  }
+  await setSecureItem(BIOMETRIC_ENABLED_KEY, enabled ? 'true' : 'false');
+}
+
+/** Deletes the email + password that older versions stored for fingerprint sign-in. */
+export async function purgeLegacyCredentials(): Promise<void> {
+  await deleteSecureItem(LEGACY_CREDENTIALS_KEY);
+}
+
+/** Remembers the last signed-in email so sign-in forms can be prefilled (never the password). */
+export async function rememberEmail(email: string): Promise<void> {
+  await setSecureItem(LAST_EMAIL_KEY, email);
+}
+
+export async function getRememberedEmail(): Promise<string | null> {
+  return getSecureItem(LAST_EMAIL_KEY);
 }

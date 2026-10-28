@@ -1,9 +1,17 @@
 import { parseNotification, parseSms } from '@/domain/parsing/parseSms';
+import { totalSpend } from '@/domain/budget';
+import type { CategoryId } from '@/domain/categories';
 import { MINUTE_MS, startOfDayMs } from '@/domain/time';
 
 import { getOrFreezeBudget, getSnapshot, getStreak } from '../budgetRepo';
 import { MIGRATIONS, migrate, type SqlDb } from '../db';
-import { getProfile, replaceFixedExpenses, saveProfile } from '../profileRepo';
+import {
+  getProfile,
+  markProfileSynced,
+  profileNeedsSync,
+  replaceFixedExpenses,
+  saveProfile,
+} from '../profileRepo';
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -15,10 +23,14 @@ import { createTestClock, createTestDb } from '../testing/nodeSqliteDb';
 import {
   addManual,
   countTransactions,
+  deleteTransaction,
   getRules,
   ingestParsed,
+  isDeleted,
   listTransactions,
+  markDeletesSynced,
   markSynced,
+  pendingDeletes,
   pendingSync,
   recategorise,
   setExcluded,
@@ -264,6 +276,93 @@ describe('profile + budget', () => {
       );
     }
     expect(await getStreak(db, Date.UTC(2026, 8, 4, 6, 0))).toBe(3);
+  });
+});
+
+describe('budget totals in SQL', () => {
+  it('match totalSpend: refunds net off; excluded, fixed and transfer credits do not', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 100000_00, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    const profile = await getProfile(db);
+    if (!profile) throw new Error('profile missing');
+    const at = Date.UTC(2026, 8, 2, 6, 0); // 2 Sep 2026
+    const add = async (amount: number, category: CategoryId, credit = false, excluded = false) => {
+      const tx = await addManual(
+        db,
+        { amountPaise: amount, category, note: null, merchant: null, occurredAt: at },
+        clock,
+      );
+      if (credit) await db.runAsync(`UPDATE transactions SET direction = 'credit' WHERE id = ?`, [tx.id]);
+      if (excluded) await setExcluded(db, tx.id, true, clock);
+    };
+    await add(1000_00, 'food');
+    await add(500_00, 'shopping');
+    await add(300_00, 'shopping', true); // refund: nets off
+    await add(9000_00, 'rent_emi'); // fixed: never counts
+    await add(2000_00, 'food', false, true); // excluded
+    await add(700_00, 'transfers', true); // money in from a person: not a refund
+    await add(400_00, 'other', true); // general income: not a refund
+
+    const expected = totalSpend(await listTransactions(db, { limit: 1000 }));
+    expect(expected).toBe(1200_00);
+    const nextDay = Date.UTC(2026, 8, 3, 6, 0);
+    const snap = await getSnapshot(db, profile, nextDay);
+    expect(snap.spentBeforeTodayPaise).toBe(expected);
+    // Per-day spend for the streak counts that day's debits only (refunds are not per-day credit).
+    const sameDay = await getSnapshot(db, profile, at);
+    expect(sameDay.spentTodayPaise).toBe(expected);
+  });
+});
+
+describe('deleted payments', () => {
+  it('are remembered for sync and never come back from a duplicate SMS', async () => {
+    const { transaction } = await ingestParsed(db, smsAt(ZOMATO_UPI), clock);
+    await deleteTransaction(db, transaction.id, clock);
+
+    expect(await countTransactions(db)).toBe(0);
+    expect(await isDeleted(db, transaction.dedupeHash)).toBe(true);
+    expect((await pendingDeletes(db)).map((d) => d.dedupeHash)).toEqual([transaction.dedupeHash]);
+
+    await markDeletesSynced(db, [transaction.dedupeHash]);
+    expect(await pendingDeletes(db)).toHaveLength(0);
+    expect(await isDeleted(db, transaction.dedupeHash)).toBe(true);
+  });
+});
+
+describe('profile sync version', () => {
+  it('stays pending when the profile is edited while an upload is in flight', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 50000_00, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+    );
+    const sent = await profileNeedsSync(db);
+    expect(sent).not.toBeNull();
+
+    clock.advance(1000);
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 60000_00, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+    );
+    await markProfileSynced(db, sent ?? undefined);
+    expect(await profileNeedsSync(db)).not.toBeNull();
+
+    await markProfileSynced(db, (await profileNeedsSync(db)) ?? undefined);
+    expect(await profileNeedsSync(db)).toBeNull();
+  });
+
+  it('keeps the budget start date when the profile is edited later', async () => {
+    await saveProfile(db, { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 }, clock);
+    const start = (await getProfile(db))?.startDate;
+    expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    clock.advance(40 * 86_400_000);
+    await saveProfile(db, { monthlySalaryPaise: 2, payday: 1, monthlySavingsGoalPaise: 0 }, clock);
+    expect((await getProfile(db))?.startDate).toBe(start);
   });
 });
 

@@ -11,6 +11,12 @@ export const userProfileSchema = z.object({
   payday: z.number().int().min(1).max(31),
   savingsGoalPaise: z.number().int(),
   timezone: z.string(),
+  /** Day the budget was first set up (YYYY-MM-DD); older servers omit it. */
+  budgetStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
 
@@ -37,6 +43,8 @@ export const syncResultSchema = z.object({
   totalProcessed: z.number().int(),
 });
 export type SyncResult = z.infer<typeof syncResultSchema>;
+
+export const deleteResultSchema = z.object({ deleted: z.number().int() });
 
 export const remoteTransactionSchema = z.object({
   id: z.string().min(1),

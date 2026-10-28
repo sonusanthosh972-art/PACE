@@ -4,14 +4,24 @@ import { getAppDb } from '@/data/appDb';
 import type { SqlDb } from '@/data/db';
 import { getProfile, markProfileSynced, profileNeedsSync } from '@/data/profileRepo';
 import { getSettings } from '@/data/settingsRepo';
-import { markSynced, pendingSync } from '@/data/transactionsRepo';
+import {
+  markDeletesSynced,
+  markSynced,
+  pendingDeletes,
+  pendingSync,
+} from '@/data/transactionsRepo';
 import { useAuthStore } from '@/state/authStore';
 
 import { registerRemoteWipe } from './actions';
 import { apiClient, ApiError, testConnection } from './api/client';
-import { fixedExpensesListSchema, syncResultSchema, userProfileSchema } from './api/schemas';
+import {
+  deleteResultSchema,
+  fixedExpensesListSchema,
+  syncResultSchema,
+  userProfileSchema,
+} from './api/schemas';
 import { clearTokens } from './api/tokens';
-import { registerNewTransactionHook } from './liveEvents';
+import { registerLocalChangeHook, registerNewTransactionHook } from './liveEvents';
 
 const BACKOFF_DELAYS_MS = [5_000, 30_000, 120_000, 300_000]; // 5s, 30s, 2min, 5min
 
@@ -35,6 +45,13 @@ registerRemoteWipe(async () => {
 
 // Automatically trigger sync when new transactions arrive locally
 registerNewTransactionHook(async (db) => {
+  if (useAuthStore.getState().isAuthenticated) {
+    scheduleSync(db, 1000);
+  }
+});
+
+// Edits, deletes and budget changes made on the phone go up shortly after
+registerLocalChangeHook((db) => {
   if (useAuthStore.getState().isAuthenticated) {
     scheduleSync(db, 1000);
   }
@@ -110,21 +127,20 @@ export async function syncNow(
   }
 
   isSyncing = true;
-  auth.setSyncStatus('syncing');
-
-  const database = db ?? (await getAppDb());
-  const settings = await getSettings(database);
-  if (settings.demoMode) {
-    // Sample demo data must never sync to the server
-    isSyncing = false;
-    auth.setSyncStatus('idle');
-    return { syncedTransactions: 0, syncedProfile: false };
-  }
-
+  let database: SqlDb | undefined = db;
   let syncedTransactions = 0;
   let syncedProfile = false;
 
   try {
+    database = database ?? (await getAppDb());
+    const settings = await getSettings(database);
+    if (settings.demoMode) {
+      // Sample demo data must never sync to the server
+      auth.setSyncStatus('idle');
+      return { syncedTransactions: 0, syncedProfile: false };
+    }
+    auth.setSyncStatus('syncing');
+
     // 1. Send pending transactions in batches of up to 200
     while (true) {
       const pending = await pendingSync(database, 200);
@@ -170,9 +186,23 @@ export async function syncNow(
       if (pending.length < 200) break;
     }
 
-    // 2. Send pending profile and fixed expenses if changed
-    const needsProfileSync = await profileNeedsSync(database);
-    if (needsProfileSync) {
+    // 2. Send payments the user deleted
+    while (true) {
+      const deletes = await pendingDeletes(database, 200);
+      if (deletes.length === 0) break;
+      const hashes = deletes.map((d) => d.dedupeHash);
+      await apiClient(
+        '/api/v1/transactions/delete',
+        { method: 'POST', body: { dedupeHashes: hashes } },
+        deleteResultSchema,
+      );
+      await markDeletesSynced(database, hashes);
+      if (deletes.length < 200) break;
+    }
+
+    // 3. Send pending profile and fixed expenses if changed
+    const profileVersion = await profileNeedsSync(database);
+    if (profileVersion !== null) {
       const profile = await getProfile(database);
       if (profile) {
         await apiClient(
@@ -183,6 +213,7 @@ export async function syncNow(
               salaryPaise: profile.monthlySalaryPaise,
               payday: profile.payday,
               savingsGoalPaise: profile.monthlySavingsGoalPaise,
+              budgetStartDate: profile.startDate ?? null,
             },
           },
           userProfileSchema,
@@ -202,7 +233,7 @@ export async function syncNow(
           fixedExpensesListSchema,
         );
 
-        await markProfileSynced(database);
+        await markProfileSynced(database, profileVersion);
         syncedProfile = true;
       }
     }

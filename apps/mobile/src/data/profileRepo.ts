@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { BudgetProfile, FixedExpense } from '@/domain/budget';
+import { toDateKey, type DateKey } from '@/domain/time';
 
 import type { SqlDb } from './db';
 import type { Clock } from './transactionsRepo';
@@ -41,25 +42,46 @@ export async function getProfile(db: SqlDb): Promise<BudgetProfile | null> {
     salary_paise: number;
     payday: number;
     savings_goal_paise: number;
-  }>('SELECT salary_paise, payday, savings_goal_paise FROM profile WHERE id = 1', []);
+    budget_start: string | null;
+  }>('SELECT salary_paise, payday, savings_goal_paise, budget_start FROM profile WHERE id = 1', []);
   if (!row) return null;
   return {
     monthlySalaryPaise: row.salary_paise,
     payday: row.payday,
     monthlySavingsGoalPaise: row.savings_goal_paise,
+    startDate: row.budget_start,
     fixedExpenses: await getFixedExpenses(db),
   };
 }
 
-export async function saveProfile(db: SqlDb, input: ProfileInput, clock: Clock): Promise<void> {
+/**
+ * The first save records today as the budget start; later edits keep it. Pass `startDate` to set
+ * it explicitly (null = no proration, e.g. a restored account whose history is all on the phone).
+ */
+export async function saveProfile(
+  db: SqlDb,
+  input: ProfileInput,
+  clock: Clock,
+  startDate?: DateKey | null,
+): Promise<void> {
   const p = profileInputSchema.parse(input);
+  const now = clock.now();
+  const keepStart = startDate === undefined;
   await db.runAsync(
-    `INSERT INTO profile (id, salary_paise, payday, savings_goal_paise, updated_at, sync_state)
-     VALUES (1, ?, ?, ?, ?, 'pending')
+    `INSERT INTO profile (id, salary_paise, payday, savings_goal_paise, budget_start, updated_at, sync_state)
+     VALUES (1, ?, ?, ?, ?, ?, 'pending')
      ON CONFLICT(id) DO UPDATE SET salary_paise = excluded.salary_paise, payday = excluded.payday,
-       savings_goal_paise = excluded.savings_goal_paise, updated_at = excluded.updated_at,
-       sync_state = 'pending'`,
-    [p.monthlySalaryPaise, p.payday, p.monthlySavingsGoalPaise, clock.now()],
+       savings_goal_paise = excluded.savings_goal_paise,
+       budget_start = CASE WHEN ? THEN profile.budget_start ELSE excluded.budget_start END,
+       updated_at = excluded.updated_at, sync_state = 'pending'`,
+    [
+      p.monthlySalaryPaise,
+      p.payday,
+      p.monthlySavingsGoalPaise,
+      keepStart ? toDateKey(now) : startDate,
+      now,
+      keepStart ? 1 : 0,
+    ],
   );
 }
 
@@ -89,14 +111,25 @@ export async function replaceFixedExpenses(
   return saved;
 }
 
-export async function profileNeedsSync(db: SqlDb): Promise<boolean> {
-  const row = await db.getFirstAsync<{ sync_state: string }>(
-    'SELECT sync_state FROM profile WHERE id = 1',
+/** The pending profile's version (its updated_at), or null when nothing needs syncing. */
+export async function profileNeedsSync(db: SqlDb): Promise<number | null> {
+  const row = await db.getFirstAsync<{ sync_state: string; updated_at: number }>(
+    'SELECT sync_state, updated_at FROM profile WHERE id = 1',
     [],
   );
-  return row?.sync_state === 'pending';
+  return row?.sync_state === 'pending' ? row.updated_at : null;
 }
 
-export async function markProfileSynced(db: SqlDb): Promise<void> {
-  await db.runAsync(`UPDATE profile SET sync_state = 'synced' WHERE id = 1`, []);
+/**
+ * Marks the profile synced. With `sentVersion`, only if it was not edited again while the upload
+ * was in flight (otherwise it stays pending and goes up next time).
+ */
+export async function markProfileSynced(db: SqlDb, sentVersion?: number): Promise<void> {
+  if (sentVersion === undefined) {
+    await db.runAsync(`UPDATE profile SET sync_state = 'synced' WHERE id = 1`, []);
+  } else {
+    await db.runAsync(`UPDATE profile SET sync_state = 'synced' WHERE id = 1 AND updated_at = ?`, [
+      sentVersion,
+    ]);
+  }
 }

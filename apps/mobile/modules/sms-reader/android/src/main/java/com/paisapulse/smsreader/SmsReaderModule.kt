@@ -75,11 +75,16 @@ class SmsReaderModule : Module() {
       out
     }
 
-    /** Queued live SMS / notifications; clears the queue. */
-    AsyncFunction("drainPendingAsync") {
-      PendingStore.drain(context).map { item ->
+    /** Queued live SMS / notifications; the queue keeps them until ackPendingAsync. */
+    AsyncFunction("peekPendingAsync") {
+      PendingStore.peek(context).map { item ->
         item.mapValues { (_, v) -> if (v is Long) v.toDouble() else v }
       }
+    }
+
+    /** Removes queued items up to `upToSeq`, once JS has stored them. */
+    AsyncFunction("ackPendingAsync") { upToSeq: Double ->
+      PendingStore.ack(context, upToSeq.toLong())
     }
 
     AsyncFunction("clearPendingAsync") {

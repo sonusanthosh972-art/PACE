@@ -76,6 +76,7 @@ function BudgetForm({ initial }: { initial: BudgetProfile }) {
           payday,
           monthlySavingsGoalPaise: savings ?? 0,
           fixedExpenses: initial.fixedExpenses,
+          startDate: initial.startDate,
         }}
       />
       {error ? (

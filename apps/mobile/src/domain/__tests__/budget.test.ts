@@ -5,6 +5,7 @@ import {
   daysLeftInCycle,
   effectivePayday,
   onBudgetStreak,
+  poolForCycle,
   remainingToday,
   snapshotForDay,
   spendableForCycle,
@@ -190,6 +191,34 @@ describe('snapshotForDay', () => {
     });
     expect(s.todayBudgetPaise).toBe(0);
     expect(s.usedRatio).toBe(1);
+  });
+});
+
+describe('setting up part-way through a cycle', () => {
+  // October 2026 cycle with payday 1: 31 days, ₹50,000 spendable → ₹1,612.90/day.
+  const cycle = cycleFor('2026-10-28', 1);
+
+  it('prorates the pool to the days covered from the setup day', () => {
+    expect(poolForCycle({ ...PROFILE, startDate: '2026-10-28' }, cycle)).toBe(
+      Math.round((rupees(50000) * 4) / 31),
+    );
+  });
+
+  it('gives the normal per-day pace on the setup day, not the whole month in the days left', () => {
+    const s = snapshotForDay({
+      profile: { ...PROFILE, startDate: '2026-10-28' },
+      today: '2026-10-28',
+      cycleSpendBeforeTodayPaise: 0,
+      spentTodayPaise: 0,
+    });
+    expect(s.daysLeft).toBe(4);
+    expect(s.todayBudgetPaise).toBe(161290); // previously 50000 ÷ 4 = ₹12,500
+  });
+
+  it('uses the full pool when set up on payday, before the cycle, or with no start date', () => {
+    expect(poolForCycle({ ...PROFILE, startDate: '2026-10-01' }, cycle)).toBe(rupees(50000));
+    expect(poolForCycle({ ...PROFILE, startDate: '2026-09-15' }, cycle)).toBe(rupees(50000));
+    expect(poolForCycle({ ...PROFILE, startDate: null }, cycle)).toBe(rupees(50000));
   });
 });
 

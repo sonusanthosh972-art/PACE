@@ -15,6 +15,8 @@ export interface BudgetProfile {
   payday: number; // 1–31
   fixedExpenses: readonly FixedExpense[];
   monthlySavingsGoalPaise: Paise;
+  /** Day the budget was first set up; the cycle containing it is prorated from this day. */
+  startDate?: DateKey | null;
 }
 
 export interface Cycle {
@@ -67,6 +69,27 @@ export function spendableForCycle(profile: BudgetProfile): Paise {
     sumPaise(profile.fixedExpenses.map((f) => f.amountPaise)) -
     profile.monthlySavingsGoalPaise
   );
+}
+
+/**
+ * First day whose spending counts in this cycle: the setup day when the budget was set up
+ * part-way through the cycle, otherwise the cycle start.
+ */
+export function budgetStartInCycle(cycle: Cycle, startDate?: DateKey | null): DateKey {
+  return startDate && startDate > cycle.start && startDate <= cycle.end ? startDate : cycle.start;
+}
+
+/**
+ * Money available for the cycle. A cycle joined part-way only gets its share for the days covered
+ * (spendable × coveredDays ÷ totalDays), so the first day's budget matches the usual per-day pace
+ * instead of the whole month being squeezed into the days that are left.
+ */
+export function poolForCycle(profile: BudgetProfile, cycle: Cycle): Paise {
+  const spendable = spendableForCycle(profile);
+  const from = budgetStartInCycle(cycle, profile.startDate);
+  if (from === cycle.start) return spendable;
+  const coveredDays = diffDays(from, cycle.end) + 1;
+  return divideRound(spendable * coveredDays, cycle.totalDays);
 }
 
 export interface SpendLike {
@@ -149,7 +172,7 @@ export function snapshotForDay(args: {
 }): BudgetSnapshot {
   const cycle = cycleFor(args.today, args.profile.payday);
   const daysLeft = daysLeftInCycle(args.today, cycle);
-  const spendablePaise = spendableForCycle(args.profile);
+  const spendablePaise = poolForCycle(args.profile, cycle);
   const todayBudgetPaise =
     args.frozenTodayBudgetPaise ??
     computeTodayBudget({

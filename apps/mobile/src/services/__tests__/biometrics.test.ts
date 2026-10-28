@@ -1,11 +1,14 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 
+import * as SecureStore from 'expo-secure-store';
+
 import {
   authenticateWithBiometrics,
   checkBiometrics,
-  getBiometricCredentials,
+  getRememberedEmail,
   isBiometricEnabled,
-  saveBiometricCredentials,
+  purgeLegacyCredentials,
+  rememberEmail,
   setBiometricEnabled,
 } from '../biometrics';
 
@@ -39,23 +42,48 @@ describe('biometrics service', () => {
     expect(authed).toBe(false);
   });
 
-  it('saves and retrieves biometric credentials securely', async () => {
-    await saveBiometricCredentials('user@example.com', 'mypassword');
-    expect(await isBiometricEnabled()).toBe(true);
-
-    const creds = await getBiometricCredentials();
-    expect(creds).toEqual({
-      email: 'user@example.com',
-      password: 'mypassword',
-    });
+  it('unlocks with the phone PIN when no fingerprint is enrolled', async () => {
+    (LocalAuthentication.isEnrolledAsync as jest.Mock).mockResolvedValue(false);
+    (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValue(1); // SECRET
+    try {
+      expect((await checkBiometrics()).deviceSecure).toBe(true);
+      expect(await authenticateWithBiometrics()).toBe(true);
+      expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ disableDeviceFallback: false }),
+      );
+    } finally {
+      (LocalAuthentication.isEnrolledAsync as jest.Mock).mockResolvedValue(true);
+      (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValue(3);
+    }
   });
 
-  it('clears credentials when disabled', async () => {
-    await saveBiometricCredentials('user@example.com', 'mypassword');
-    expect(await isBiometricEnabled()).toBe(true);
+  it('never locks when the phone has no screen lock', async () => {
+    (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValue(0); // NONE
+    try {
+      await setBiometricEnabled(true);
+      expect(await isBiometricEnabled()).toBe(false);
+      expect(await authenticateWithBiometrics()).toBe(false);
+    } finally {
+      (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValue(3);
+    }
+  });
 
+  it('turns the app lock on and off', async () => {
+    await setBiometricEnabled(true);
+    expect(await isBiometricEnabled()).toBe(true);
     await setBiometricEnabled(false);
     expect(await isBiometricEnabled()).toBe(false);
-    expect(await getBiometricCredentials()).toBeNull();
+  });
+
+  it('remembers only the email and deletes passwords saved by older versions', async () => {
+    await SecureStore.setItemAsync(
+      'paisapulse_biometric_creds',
+      '{"email":"a@b.c","password":"x"}',
+    );
+    await purgeLegacyCredentials();
+    expect(await SecureStore.getItemAsync('paisapulse_biometric_creds')).toBeNull();
+
+    await rememberEmail('user@example.com');
+    expect(await getRememberedEmail()).toBe('user@example.com');
   });
 });

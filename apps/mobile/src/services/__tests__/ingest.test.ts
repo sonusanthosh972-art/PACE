@@ -38,7 +38,11 @@ function fakeSource(
       reads.push(since);
       return inbox.filter((i) => i.kind === 'sms' && i.receivedAt >= since);
     },
-    drainPending: async () => pending.splice(0, pending.length),
+    peekPending: async () => [...pending],
+    ackPending: async (upToSeq) => {
+      const kept = pending.filter((i) => (i.queueSeq ?? Infinity) > upToSeq);
+      pending.splice(0, pending.length, ...kept);
+    },
   };
 }
 

@@ -138,6 +138,7 @@ export async function loadDemoData(db: SqlDb, clock: Clock): Promise<number> {
     db,
     { monthlySalaryPaise: 1_00_000_00, payday: 1, monthlySavingsGoalPaise: 10_000_00 },
     clock,
+    null, // sample spending covers the whole cycle
   );
   await replaceFixedExpenses(
     db,

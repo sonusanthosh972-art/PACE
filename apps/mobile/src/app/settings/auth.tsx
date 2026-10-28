@@ -1,10 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-
-import { useTheme } from '@/theme/ThemeProvider';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -24,12 +22,7 @@ import {
 } from '@/services/api/client';
 import { restoreFromServer } from '@/services/restore';
 import { syncNow } from '@/services/sync';
-import {
-  authenticateWithBiometrics,
-  checkBiometrics,
-  getBiometricCredentials,
-  saveBiometricCredentials,
-} from '@/services/biometrics';
+import { getRememberedEmail, rememberEmail } from '@/services/biometrics';
 import { useAuthStore, type SyncState } from '@/state/authStore';
 import { invalidateAll } from '@/state/queries';
 import { SPACE } from '@/theme/tokens';
@@ -81,21 +74,13 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Biometrics
-  const [hasBiometrics, setHasBiometrics] = useState(false);
-  const [biometryName, setBiometryName] = useState('Fingerprint');
-  const [hasSavedCreds, setHasSavedCreds] = useState(false);
-
-  const { colors } = useTheme();
-  const autoBioPromptRef = useRef(false);
-
+  // Prefill the last signed-in email (the password is never stored)
   useEffect(() => {
-    checkBiometrics().then(async (status) => {
-      setHasBiometrics(status.hasHardware && status.isEnrolled);
-      setBiometryName(status.biometryName);
-      const creds = await getBiometricCredentials();
-      setHasSavedCreds(creds !== null);
-    });
+    getRememberedEmail()
+      .then((saved) => {
+        if (saved) setEmail((current) => current || saved);
+      })
+      .catch(() => undefined);
   }, []);
 
   /** Continues the ordered flow: setup → permissions → Today (see completeAccountFlow). */
@@ -112,43 +97,6 @@ export default function AuthScreen() {
     },
     [queryClient],
   );
-
-  const onBiometricSignIn = useCallback(async () => {
-    setError(null);
-    const authed = await authenticateWithBiometrics(`Sign in with ${biometryName}`);
-    if (!authed) return;
-
-    const creds = await getBiometricCredentials();
-    if (!creds) {
-      setError(`No saved credentials found. Please enter password.`);
-      return;
-    }
-
-    setEmail(creds.email);
-    setPassword(creds.password);
-    setBusy(true);
-    try {
-      const db = await getAppDb();
-      const next = await completeAccountFlow(db, 'login', () => login(creds.email, creds.password));
-      await goNext(next);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Biometric sign-in failed. Please try again.';
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
-  }, [biometryName, goNext, login]);
-
-  useEffect(() => {
-    if (mode === 'login' && hasBiometrics && hasSavedCreds && !autoBioPromptRef.current) {
-      autoBioPromptRef.current = true;
-      const timer = setTimeout(() => {
-        onBiometricSignIn();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [mode, hasBiometrics, hasSavedCreds, onBiometricSignIn]);
 
   // Server address configuration
   const [serverAddress, setServerAddress] = useState(() => getApiBaseUrl());
@@ -219,9 +167,7 @@ export default function AuthScreen() {
           : login(trimmedEmail, password),
       );
 
-      if (hasBiometrics) {
-        await saveBiometricCredentials(trimmedEmail, password);
-      }
+      await rememberEmail(trimmedEmail);
       await goNext(next);
     } catch (err: unknown) {
       const message =
@@ -431,26 +377,6 @@ export default function AuthScreen() {
       />
 
       <View style={styles.form}>
-        {mode === 'login' && hasBiometrics ? (
-          <View style={styles.bioSection}>
-            <Button
-              label={`Sign In with ${biometryName}`}
-              variant="secondary"
-              icon="finger-print-outline"
-              loading={busy}
-              onPress={onBiometricSignIn}
-              accessibilityHint={`Authenticate instantly using ${biometryName}`}
-            />
-            <View style={styles.orDivider}>
-              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              <AppText variant="caption" color="muted">
-                or use normal login
-              </AppText>
-              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-            </View>
-          </View>
-        ) : null}
-
         {mode === 'register' ? (
           <TextField
             label="Name"
@@ -533,17 +459,6 @@ const styles = StyleSheet.create({
   userMeta: { flex: 1, gap: 2 },
   group: { gap: SPACE.sm },
   form: { gap: SPACE.md, marginTop: SPACE.sm },
-  bioSection: { gap: SPACE.sm },
-  orDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.sm,
-    marginVertical: SPACE.xs,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
   serverCard: { padding: SPACE.md + 4, gap: SPACE.sm, marginTop: SPACE.xs },
   serverActions: { flexDirection: 'row', gap: SPACE.md, marginTop: SPACE.xs },
   privacyCard: { marginTop: SPACE.lg, padding: SPACE.md + 4, gap: SPACE.md },

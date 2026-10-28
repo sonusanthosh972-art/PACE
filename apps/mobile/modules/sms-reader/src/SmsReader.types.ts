@@ -5,6 +5,8 @@ export const pendingSmsSchema = z.object({
   sender: z.string(),
   body: z.string(),
   receivedAt: z.number(),
+  /** Position in the native queue (live items only), used to acknowledge once stored. */
+  queueSeq: z.number().optional(),
 });
 
 export const pendingNotificationSchema = z.object({
@@ -13,6 +15,7 @@ export const pendingNotificationSchema = z.object({
   title: z.string(),
   text: z.string(),
   postedAt: z.number(),
+  queueSeq: z.number().optional(),
 });
 
 /** An SMS or notification queued natively, waiting to be parsed. Raw text stays on device. */

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import * as SmsReader from '../../../modules/sms-reader';
@@ -66,26 +66,29 @@ export default function SettingsScreen() {
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioName, setBioName] = useState('Fingerprint');
 
+  // Turning the lock on or off both need the owner's confirmation.
   const onToggleBiometrics = async () => {
-    if (!bioEnabled) {
-      const ok = await authenticateWithBiometrics(`Enable ${bioName} unlock`);
-      if (ok) {
-        await setBiometricEnabled(true);
-        setBioEnabled(true);
-      }
-    } else {
-      await setBiometricEnabled(false);
-      setBioEnabled(false);
-    }
+    const ok = await authenticateWithBiometrics(
+      bioEnabled ? 'Turn off app lock' : 'Turn on app lock',
+    );
+    if (!ok) return;
+    await setBiometricEnabled(!bioEnabled);
+    setBioEnabled(!bioEnabled);
   };
 
-  useState(() => {
+  useEffect(() => {
+    let active = true;
     checkBiometrics().then(async (status) => {
-      setBioAvailable(status.hasHardware && status.isEnrolled);
-      setBioName(status.biometryName);
-      setBioEnabled(await isBiometricEnabled());
+      const enabled = await isBiometricEnabled();
+      if (!active) return;
+      setBioAvailable(status.deviceSecure);
+      setBioName(status.hasHardware && status.isEnrolled ? status.biometryName : 'Phone PIN');
+      setBioEnabled(enabled);
     });
-  });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (settings.isPending || profile.isPending) {
     return (
@@ -220,8 +223,12 @@ export default function SettingsScreen() {
         {bioAvailable ? (
           <ListRow
             icon="finger-print-outline"
-            title={`${bioName} unlock`}
-            subtitle={bioEnabled ? 'Quick sign-in and app unlock active' : 'Disabled'}
+            title="App lock"
+            subtitle={
+              bioEnabled
+                ? `Asks for your ${bioName.toLowerCase()} when you open the app`
+                : 'Off: anyone with your phone can open the app'
+            }
             value={bioEnabled ? 'On' : 'Off'}
             onPress={onToggleBiometrics}
           />

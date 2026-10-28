@@ -6,7 +6,7 @@ import {
   replaceFixedExpenses,
   saveProfile,
 } from '@/data/profileRepo';
-import type { Clock } from '@/data/transactionsRepo';
+import { isDeleted, type Clock } from '@/data/transactionsRepo';
 import { toDateKey } from '@/domain/time';
 
 import { apiClient } from './api/client';
@@ -64,6 +64,8 @@ export async function restoreFromServer(
           monthlySavingsGoalPaise: remoteProfile.savingsGoalPaise,
         },
         clock,
+        // Keep this phone's start date; on a fresh install use the account's.
+        localProfile ? undefined : (remoteProfile.budgetStartDate ?? null),
       );
       restoredProfile = true;
     }
@@ -113,6 +115,9 @@ export async function restoreFromServer(
     if (res.items.length > 0) {
       await db.withTransactionAsync(async () => {
         for (const tx of res.items) {
+          // Deleted on this phone (delete not uploaded yet): never bring it back.
+          if (await isDeleted(db, tx.dedupeHash)) continue;
+
           // Check for existing transaction by id OR dedupe_hash
           const existing = await db.getFirstAsync<{
             id: string;

@@ -6,7 +6,8 @@ declare class SmsReaderNativeModule extends NativeModule<SmsReaderModuleEvents> 
   getSmsPermissionsAsync(): Promise<unknown>;
   requestSmsPermissionsAsync(): Promise<unknown>;
   readBankSmsAsync(sinceMs: number): Promise<unknown[]>;
-  drainPendingAsync(): Promise<unknown[]>;
+  peekPendingAsync(): Promise<unknown[]>;
+  ackPendingAsync(upToSeq: number): Promise<void>;
   clearPendingAsync(): Promise<void>;
   isNotificationAccessGranted(): boolean;
   openNotificationAccessSettings(): void;

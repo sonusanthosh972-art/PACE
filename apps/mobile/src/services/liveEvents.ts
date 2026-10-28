@@ -22,6 +22,19 @@ export function registerNewTransactionHook(hook: Hook): void {
   hooks.push(hook);
 }
 
+type LocalChangeHook = (db: SqlDb) => void;
+
+const localChangeHooks: LocalChangeHook[] = [];
+
+/** Runs after the user edits local data (recategorise, exclude, delete, budget), e.g. to sync. */
+export function registerLocalChangeHook(hook: LocalChangeHook): void {
+  localChangeHooks.push(hook);
+}
+
+export function onLocalChange(db: SqlDb): void {
+  for (const hook of localChangeHooks) hook(db);
+}
+
 export async function onNewTransactions(
   db: SqlDb,
   inserted: readonly Transaction[],

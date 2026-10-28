@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { ReactNode } from 'react';
 import Animated, {
@@ -18,12 +18,6 @@ import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { getAppDb } from '@/data/appDb';
-import {
-  authenticateWithBiometrics,
-  checkBiometrics,
-  getBiometricCredentials,
-} from '@/services/biometrics';
-import { completeAccountFlow } from '@/services/accountFlow';
 import { systemClock } from '@/services/clock';
 import { loadDemoData } from '@/services/demo';
 import { useAuthStore } from '@/state/authStore';
@@ -48,59 +42,11 @@ export default function Welcome() {
   const { colors, reducedMotion } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const client = useQueryClient();
-  const login = useAuthStore((s) => s.login);
   const signedIn = useAuthStore((s) => s.isAuthenticated);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  const [unlocking, setUnlocking] = useState(false);
   const splashGone = useSplash((s) => s.dismissed);
   const [introDone, setIntroDone] = useState(false);
   const onIntroEnd = useCallback(() => setIntroDone(true), []);
-
-  const [hasBiometrics, setHasBiometrics] = useState(false);
-  const [biometryName, setBiometryName] = useState('Fingerprint');
-  const [hasSavedCreds, setHasSavedCreds] = useState(false);
-
-  useEffect(() => {
-    checkBiometrics().then(async (status) => {
-      setHasBiometrics(status.hasHardware && status.isEnrolled);
-      setBiometryName(status.biometryName);
-      const creds = await getBiometricCredentials();
-      setHasSavedCreds(creds !== null);
-    });
-  }, []);
-
-  const onQuickUnlock = useCallback(async () => {
-    setUnlocking(true);
-    try {
-      const authed = await authenticateWithBiometrics(`Unlock Paisa Pulse with ${biometryName}`);
-      if (!authed) return;
-
-      const creds = await getBiometricCredentials();
-      if (!creds) {
-        router.push('/settings/auth?mode=login');
-        return;
-      }
-
-      const next = await completeAccountFlow(await getAppDb(), 'login', () =>
-        login(creds.email, creds.password),
-      );
-      await invalidateAll(client);
-      router.replace(next);
-    } finally {
-      setUnlocking(false);
-    }
-  }, [biometryName, client, login]);
-
-  const autoPromptRef = useRef(false);
-  useEffect(() => {
-    if (splashGone && hasBiometrics && hasSavedCreds && !autoPromptRef.current && !signedIn) {
-      autoPromptRef.current = true;
-      const timer = setTimeout(() => {
-        onQuickUnlock();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [splashGone, hasBiometrics, hasSavedCreds, signedIn, onQuickUnlock]);
 
   const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
 
@@ -140,19 +86,9 @@ export default function Welcome() {
                 onPress={() => router.push('/settings/auth?mode=register')}
                 accessibilityHint="Create an account, set up your budget, then read your bank SMS"
               />
-              {hasBiometrics ? (
-                <Button
-                  label={`Sign in with ${biometryName}`}
-                  variant="secondary"
-                  icon="finger-print-outline"
-                  loading={unlocking}
-                  onPress={onQuickUnlock}
-                  accessibilityHint={`Sign in instantly with your ${biometryName}`}
-                />
-              ) : null}
               <Button
                 label="Sign in"
-                variant={hasBiometrics ? 'ghost' : 'secondary'}
+                variant="secondary"
                 icon="log-in-outline"
                 onPress={() => router.push('/settings/auth?mode=login')}
                 accessibilityHint="Sign in and restore your budget and transactions"

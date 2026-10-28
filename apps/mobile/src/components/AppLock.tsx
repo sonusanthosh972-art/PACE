@@ -8,7 +8,6 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -18,22 +17,25 @@ import { Icon } from '@/components/Icon';
 import {
   authenticateWithBiometrics,
   checkBiometrics,
-  getBiometricCredentials,
   isBiometricEnabled,
+  purgeLegacyCredentials,
 } from '@/services/biometrics';
 import { useAuthStore } from '@/state/authStore';
 import { useLockStore } from '@/state/lockStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { RADIUS, SPACE } from '@/theme/tokens';
 
+/** Time away (switching apps, screen off) after which the app locks again. */
+export const RELOCK_AFTER_MS = 30_000;
+
 interface AppLockProps {
   onboardingComplete: boolean;
 }
 
 /**
- * AppLock screen protecting financial data.
- * When the app opens, it prompts for Fingerprint (Option 1).
- * If the user does not want to use fingerprint, they can use Normal Login (Option 2).
+ * Lock screen protecting financial data, shown only when the app lock is on (Settings) and the
+ * phone has a screen lock. Unlocks with fingerprint/face or the phone's own PIN; a signed-in user
+ * can also use their account password. There is no way past it without one of those.
  */
 export function AppLock({ onboardingComplete }: AppLockProps) {
   const { colors } = useTheme();
@@ -43,17 +45,16 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
 
+  /** null while checking whether the lock applies at all. */
+  const [lockEnabled, setLockEnabled] = useState<boolean | null>(null);
   const [hasBiometrics, setHasBiometrics] = useState(false);
   const [biometryName, setBiometryName] = useState('Fingerprint');
-  const [bioEnabled, setBioEnabled] = useState(true);
-  const [hasSavedCreds, setHasSavedCreds] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Normal login state
+  // Account password unlock (signed-in users only)
   const [passwordMode, setPasswordMode] = useState(false);
   const [password, setPassword] = useState('');
-  const [loginEmail, setLoginEmail] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -63,78 +64,63 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
 
   useEffect(() => {
     mountedRef.current = true;
+    purgeLegacyCredentials().catch(() => undefined);
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  // Check hardware and saved credentials
+  // Decide whether the lock applies, each time the app becomes locked.
   useEffect(() => {
+    if (!isLocked || !onboardingComplete) return;
     let active = true;
-    checkBiometrics().then(async (status) => {
+    Promise.all([checkBiometrics(), isBiometricEnabled()]).then(([status, enabled]) => {
       if (!active) return;
-      const available = status.hasHardware && status.isEnrolled;
-      setHasBiometrics(available);
+      setHasBiometrics(status.hasHardware && status.isEnrolled);
       setBiometryName(status.biometryName);
-      const enabled = await isBiometricEnabled();
-      setBioEnabled(enabled);
-      const creds = await getBiometricCredentials();
-      setHasSavedCreds(creds !== null);
-      if (user?.email) {
-        setLoginEmail(user.email);
-      } else if (creds?.email) {
-        setLoginEmail(creds.email);
-      }
+      setLockEnabled(enabled);
+      if (!enabled) unlock();
     });
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [isLocked, onboardingComplete, unlock]);
 
-  // Primary Action: Authenticate with Biometrics (Option 1)
-  const triggerBiometricUnlock = useCallback(async () => {
+  const deviceUnlockLabel = hasBiometrics ? biometryName : 'phone PIN';
+
+  const triggerDeviceUnlock = useCallback(async () => {
     if (authenticating) return;
     setAuthenticating(true);
     setAuthError(null);
     try {
-      const success = await authenticateWithBiometrics(`Unlock Paisa Pulse with ${biometryName}`);
+      const success = await authenticateWithBiometrics(
+        `Unlock Paisa Pulse with your ${deviceUnlockLabel}`,
+      );
       if (!mountedRef.current) return;
       if (success) {
         unlock();
       } else {
-        setAuthError(
-          `Authentication was cancelled or not recognized. Try again or use normal login.`,
-        );
-      }
-    } catch {
-      if (mountedRef.current) {
-        setAuthError(`Could not authenticate with ${biometryName}. Please use normal login.`);
+        setAuthError('Not unlocked. Try again.');
       }
     } finally {
       if (mountedRef.current) {
         setAuthenticating(false);
       }
     }
-  }, [authenticating, biometryName, unlock]);
+  }, [authenticating, deviceUnlockLabel, unlock]);
 
-  // Auto-prompt fingerprint once when locked on app open
+  // Prompt once automatically when the lock screen appears
   useEffect(() => {
-    if (
-      isLocked &&
-      onboardingComplete &&
-      !autoPromptTriggered.current &&
-      hasBiometrics &&
-      bioEnabled
-    ) {
+    if (isLocked && onboardingComplete && lockEnabled && !autoPromptTriggered.current) {
       autoPromptTriggered.current = true;
       const timer = setTimeout(() => {
-        triggerBiometricUnlock();
+        triggerDeviceUnlock();
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [isLocked, onboardingComplete, hasBiometrics, bioEnabled, triggerBiometricUnlock]);
+  }, [isLocked, onboardingComplete, lockEnabled, triggerDeviceUnlock]);
 
-  // Re-lock when app moves to background and comes back to active
+  // Lock again after the app has been away for a while
   useEffect(() => {
     if (!onboardingComplete) return;
 
@@ -142,12 +128,14 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
       if (nextState === 'background') {
         backgroundTimeRef.current = Date.now();
       } else if (nextState === 'active') {
-        const bgDuration = Date.now() - backgroundTimeRef.current;
-        if (backgroundTimeRef.current > 0 && bgDuration > 1000) {
+        const awayMs = Date.now() - backgroundTimeRef.current;
+        if (backgroundTimeRef.current > 0 && awayMs > RELOCK_AFTER_MS) {
+          setLockEnabled(null);
           lock();
           setPasswordMode(false);
           setPassword('');
           setLoginError(null);
+          setAuthError(null);
           autoPromptTriggered.current = false;
         }
         backgroundTimeRef.current = 0;
@@ -157,15 +145,10 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
     return () => sub.remove();
   }, [onboardingComplete, lock]);
 
-  // Secondary Action: Normal login with password (Option 2)
+  // Account password: only the signed-in account can unlock this phone's data.
   const handlePasswordLogin = async () => {
     setLoginError(null);
-    const targetEmail = user?.email || loginEmail.trim();
-
-    if (!targetEmail) {
-      setLoginError('Please enter your email address.');
-      return;
-    }
+    if (!user?.email) return;
     if (!password) {
       setLoginError('Please enter your password.');
       return;
@@ -173,7 +156,7 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
 
     setLoggingIn(true);
     try {
-      await login(targetEmail, password);
+      await login(user.email, password);
       if (mountedRef.current) {
         setPassword('');
         unlock();
@@ -190,24 +173,16 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
     }
   };
 
-  const handleDevicePasscodeFallback = async () => {
-    setAuthenticating(true);
-    setAuthError(null);
-    try {
-      const ok = await authenticateWithBiometrics('Unlock Paisa Pulse');
-      if (ok && mountedRef.current) {
-        unlock();
-      }
-    } finally {
-      if (mountedRef.current) {
-        setAuthenticating(false);
-      }
-    }
-  };
-
   // If app is not onboarded or already unlocked, do not display lock
-  if (!onboardingComplete || !isLocked) {
+  if (!onboardingComplete || !isLocked || lockEnabled === false) {
     return null;
+  }
+
+  // Still checking: cover the data without showing anything to tap yet.
+  if (lockEnabled === null) {
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.bg }]} />
+    );
   }
 
   return (
@@ -234,18 +209,16 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
           </View>
 
           {/* User badge if known */}
-          {user?.name || user?.email || loginEmail ? (
+          {user?.email ? (
             <Card style={styles.userCard}>
               <View style={styles.userRow}>
                 <View style={styles.userAvatar}>
                   <Icon name="person" size={18} color="onAccent" />
                 </View>
                 <View style={styles.userMeta}>
-                  <AppText variant="bodyStrong">
-                    {user?.name || (user?.email ? user.email.split('@')[0] : 'Your Account')}
-                  </AppText>
+                  <AppText variant="bodyStrong">{user.name || user.email.split('@')[0]}</AppText>
                   <AppText variant="caption" color="muted">
-                    {user?.email || loginEmail}
+                    {user.email}
                   </AppText>
                 </View>
               </View>
@@ -266,35 +239,24 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
           ) : null}
 
           {!passwordMode ? (
-            /* Option 1: Biometric First + Option 2: Normal Login button */
+            /* Phone unlock (fingerprint/face or PIN), or the account password */
             <View style={styles.actionBlock}>
-              {hasBiometrics ? (
-                <Button
-                  label={`Unlock with ${biometryName}`}
-                  icon="finger-print-outline"
-                  variant="primary"
-                  loading={authenticating}
-                  onPress={triggerBiometricUnlock}
-                  accessibilityHint={`Unlock immediately with your ${biometryName}`}
-                />
-              ) : null}
-
               <Button
-                label="Normal Login"
-                icon="log-in-outline"
-                variant={hasBiometrics ? 'secondary' : 'primary'}
-                onPress={() => setPasswordMode(true)}
-                accessibilityHint="Log in with your email and password instead of fingerprint"
+                label={`Unlock with ${deviceUnlockLabel}`}
+                icon={hasBiometrics ? 'finger-print-outline' : 'keypad-outline'}
+                variant="primary"
+                loading={authenticating}
+                onPress={triggerDeviceUnlock}
+                accessibilityHint={`Unlocks the app with your ${deviceUnlockLabel}`}
               />
 
-              {!user && !hasSavedCreds ? (
+              {user?.email ? (
                 <Button
-                  label="Unlock with device passcode"
-                  icon="keypad-outline"
-                  variant="ghost"
-                  compact
-                  onPress={handleDevicePasscodeFallback}
-                  accessibilityHint="Use your device PIN, pattern or password"
+                  label="Use account password"
+                  icon="log-in-outline"
+                  variant="secondary"
+                  onPress={() => setPasswordMode(true)}
+                  accessibilityHint="Unlock with the password of the signed-in account"
                 />
               ) : null}
             </View>
@@ -302,20 +264,8 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
             /* Option 2 Form: Normal Password Login */
             <View style={styles.passwordForm}>
               <AppText variant="bodyStrong" center>
-                Sign In with Password
+                Unlock with account password
               </AppText>
-
-              {!user?.email && (
-                <TextField
-                  label="Email"
-                  placeholder="you@example.com"
-                  value={loginEmail}
-                  onChangeText={setLoginEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              )}
 
               <TextField
                 label="Password"
@@ -341,26 +291,14 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
                 onPress={handlePasswordLogin}
               />
 
-              {hasBiometrics ? (
-                <Button
-                  label={`Back to ${biometryName}`}
-                  icon="finger-print-outline"
-                  variant="secondary"
-                  compact
-                  onPress={() => {
-                    setPasswordMode(false);
-                    setLoginError(null);
-                  }}
-                />
-              ) : null}
-
               <Button
-                label="Sign in with different account"
-                variant="ghost"
+                label={`Back to ${deviceUnlockLabel}`}
+                icon={hasBiometrics ? 'finger-print-outline' : 'keypad-outline'}
+                variant="secondary"
                 compact
                 onPress={() => {
-                  unlock();
-                  router.push('/settings/auth?mode=login');
+                  setPasswordMode(false);
+                  setLoginError(null);
                 }}
               />
             </View>

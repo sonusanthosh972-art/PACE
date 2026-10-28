@@ -89,6 +89,20 @@ export const MIGRATIONS: readonly string[] = [
     sent_at  INTEGER NOT NULL
   );
   `,
+  /* v2: day the budget was set up, so a cycle joined part-way is prorated. Existing profiles use
+     the day they were last saved, and today's frozen budget is recomputed with the new rule. */ `
+  ALTER TABLE profile ADD COLUMN budget_start TEXT;
+  UPDATE profile SET budget_start = date(updated_at / 1000, 'unixepoch', '+330 minutes');
+  DELETE FROM daily_budgets WHERE date >= date('now', '+330 minutes');
+  `,
+  /* v3: payments the user deleted. Kept so the delete reaches the server, and so a restore or a
+     late duplicate SMS/notification never brings the payment back. */ `
+  CREATE TABLE deleted_transactions (
+    dedupe_hash  TEXT PRIMARY KEY NOT NULL,
+    deleted_at   INTEGER NOT NULL,
+    sync_state   TEXT NOT NULL DEFAULT 'pending' CHECK (sync_state IN ('pending', 'synced'))
+  );
+  `,
 ];
 
 export async function migrate(db: SqlDb): Promise<number> {
