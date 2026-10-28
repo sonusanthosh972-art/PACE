@@ -11,6 +11,7 @@ import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppLock } from '@/components/AppLock';
 import { DeviceSync } from '@/components/DeviceSync';
 import { SplashScreenView } from '@/components/SplashScreenView';
 import { ErrorState } from '@/components/States';
@@ -61,6 +62,9 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
         <>
           <DeviceSync />
           <ThemedStack />
+          {ready && splashDismissed && (
+            <AppLock onboardingComplete={Boolean(settings.data?.onboardingComplete)} />
+          )}
         </>
       )}
       {!splashDismissed && <SplashScreenView ready={ready} onFinish={dismissSplash} />}

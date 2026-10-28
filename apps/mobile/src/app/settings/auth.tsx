@@ -1,8 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+
+import { useTheme } from '@/theme/ThemeProvider';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -84,6 +86,9 @@ export default function AuthScreen() {
   const [biometryName, setBiometryName] = useState('Fingerprint');
   const [hasSavedCreds, setHasSavedCreds] = useState(false);
 
+  const { colors } = useTheme();
+  const autoBioPromptRef = useRef(false);
+
   useEffect(() => {
     checkBiometrics().then(async (status) => {
       setHasBiometrics(status.hasHardware && status.isEnrolled);
@@ -94,18 +99,21 @@ export default function AuthScreen() {
   }, []);
 
   /** Continues the ordered flow: setup → permissions → Today (see completeAccountFlow). */
-  const goNext = async (next: NextStep) => {
-    await invalidateAll(queryClient);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    if (next === '/(tabs)' && router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.dismissAll();
-    router.replace(next);
-  };
+  const goNext = useCallback(
+    async (next: NextStep) => {
+      await invalidateAll(queryClient);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      if (next === '/(tabs)' && router.canGoBack()) {
+        router.back();
+        return;
+      }
+      router.dismissAll();
+      router.replace(next);
+    },
+    [queryClient],
+  );
 
-  const onBiometricSignIn = async () => {
+  const onBiometricSignIn = useCallback(async () => {
     setError(null);
     const authed = await authenticateWithBiometrics(`Sign in with ${biometryName}`);
     if (!authed) return;
@@ -130,7 +138,17 @@ export default function AuthScreen() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [biometryName, goNext, login]);
+
+  useEffect(() => {
+    if (mode === 'login' && hasBiometrics && hasSavedCreds && !autoBioPromptRef.current) {
+      autoBioPromptRef.current = true;
+      const timer = setTimeout(() => {
+        onBiometricSignIn();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [mode, hasBiometrics, hasSavedCreds, onBiometricSignIn]);
 
   // Server address configuration
   const [serverAddress, setServerAddress] = useState(() => getApiBaseUrl());
@@ -413,6 +431,26 @@ export default function AuthScreen() {
       />
 
       <View style={styles.form}>
+        {mode === 'login' && hasBiometrics ? (
+          <View style={styles.bioSection}>
+            <Button
+              label={`Sign In with ${biometryName}`}
+              variant="secondary"
+              icon="finger-print-outline"
+              loading={busy}
+              onPress={onBiometricSignIn}
+              accessibilityHint={`Authenticate instantly using ${biometryName}`}
+            />
+            <View style={styles.orDivider}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <AppText variant="caption" color="muted">
+                or use normal login
+              </AppText>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
+          </View>
+        ) : null}
+
         {mode === 'register' ? (
           <TextField
             label="Name"
@@ -457,17 +495,6 @@ export default function AuthScreen() {
           onPress={onSubmit}
           icon={mode === 'register' ? 'person-add-outline' : 'log-in-outline'}
         />
-
-        {mode === 'login' && hasBiometrics && hasSavedCreds ? (
-          <Button
-            label={`Fast Sign In with ${biometryName}`}
-            variant="secondary"
-            icon="finger-print-outline"
-            loading={busy}
-            onPress={onBiometricSignIn}
-            accessibilityHint={`Authenticate instantly using ${biometryName}`}
-          />
-        ) : null}
       </View>
 
       <SectionTitle>Server connection</SectionTitle>
@@ -506,6 +533,17 @@ const styles = StyleSheet.create({
   userMeta: { flex: 1, gap: 2 },
   group: { gap: SPACE.sm },
   form: { gap: SPACE.md, marginTop: SPACE.sm },
+  bioSection: { gap: SPACE.sm },
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginVertical: SPACE.xs,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
   serverCard: { padding: SPACE.md + 4, gap: SPACE.sm, marginTop: SPACE.xs },
   serverActions: { flexDirection: 'row', gap: SPACE.md, marginTop: SPACE.xs },
   privacyCard: { marginTop: SPACE.lg, padding: SPACE.md + 4, gap: SPACE.md },

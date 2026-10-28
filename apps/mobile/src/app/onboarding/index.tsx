@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { ReactNode } from 'react';
 import Animated, {
@@ -69,22 +69,7 @@ export default function Welcome() {
     });
   }, []);
 
-  const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
-
-  /** Sample data is only ever loaded when the user explicitly asks for it, and never on an account. */
-  const tryDemo = async () => {
-    if (signedIn) return;
-    setLoadingDemo(true);
-    try {
-      await loadDemoData(await getAppDb(), systemClock);
-      await invalidateAll(client);
-      router.replace('/(tabs)');
-    } finally {
-      setLoadingDemo(false);
-    }
-  };
-
-  const onQuickUnlock = async () => {
+  const onQuickUnlock = useCallback(async () => {
     setUnlocking(true);
     try {
       const authed = await authenticateWithBiometrics(`Unlock Paisa Pulse with ${biometryName}`);
@@ -103,6 +88,32 @@ export default function Welcome() {
       router.replace(next);
     } finally {
       setUnlocking(false);
+    }
+  }, [biometryName, client, login]);
+
+  const autoPromptRef = useRef(false);
+  useEffect(() => {
+    if (splashGone && hasBiometrics && hasSavedCreds && !autoPromptRef.current && !signedIn) {
+      autoPromptRef.current = true;
+      const timer = setTimeout(() => {
+        onQuickUnlock();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [splashGone, hasBiometrics, hasSavedCreds, signedIn, onQuickUnlock]);
+
+  const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
+
+  /** Sample data is only ever loaded when the user explicitly asks for it, and never on an account. */
+  const tryDemo = async () => {
+    if (signedIn) return;
+    setLoadingDemo(true);
+    try {
+      await loadDemoData(await getAppDb(), systemClock);
+      await invalidateAll(client);
+      router.replace('/(tabs)');
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -129,7 +140,7 @@ export default function Welcome() {
                 onPress={() => router.push('/settings/auth?mode=register')}
                 accessibilityHint="Create an account, set up your budget, then read your bank SMS"
               />
-              {hasBiometrics && hasSavedCreds ? (
+              {hasBiometrics ? (
                 <Button
                   label={`Sign in with ${biometryName}`}
                   variant="secondary"
@@ -138,15 +149,14 @@ export default function Welcome() {
                   onPress={onQuickUnlock}
                   accessibilityHint={`Sign in instantly with your ${biometryName}`}
                 />
-              ) : (
-                <Button
-                  label="Sign in"
-                  variant="secondary"
-                  icon="log-in-outline"
-                  onPress={() => router.push('/settings/auth?mode=login')}
-                  accessibilityHint="Sign in and restore your budget and transactions"
-                />
-              )}
+              ) : null}
+              <Button
+                label="Sign in"
+                variant={hasBiometrics ? 'ghost' : 'secondary'}
+                icon="log-in-outline"
+                onPress={() => router.push('/settings/auth?mode=login')}
+                accessibilityHint="Sign in and restore your budget and transactions"
+              />
               <View style={styles.secondaryActions}>
                 <Button
                   label="Use without account"

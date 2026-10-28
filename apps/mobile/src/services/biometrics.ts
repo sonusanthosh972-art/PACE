@@ -135,7 +135,10 @@ export async function getBiometricCredentials(): Promise<{
  */
 export async function isBiometricEnabled(): Promise<boolean> {
   const enabled = await getSecureItem(BIOMETRIC_ENABLED_KEY);
-  return enabled === 'true';
+  if (enabled === 'false') return false;
+  if (enabled === 'true') return true;
+  const status = await checkBiometrics();
+  return status.hasHardware && status.isEnrolled;
 }
 
 /**
@@ -144,7 +147,7 @@ export async function isBiometricEnabled(): Promise<boolean> {
 export async function setBiometricEnabled(enabled: boolean): Promise<void> {
   if (!enabled) {
     await deleteSecureItem(BIOMETRIC_CREDENTIALS_KEY);
-    await deleteSecureItem(BIOMETRIC_ENABLED_KEY);
+    await setSecureItem(BIOMETRIC_ENABLED_KEY, 'false');
   } else {
     await setSecureItem(BIOMETRIC_ENABLED_KEY, 'true');
   }

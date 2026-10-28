@@ -39,3 +39,7 @@ local.properties
 # --- Next.js (apps/admin) ---
 .next/
 next-env.d.ts
+
+# --- Release signing (never commit) ---
+*.jks
+apps/mobile/credentials/
