@@ -21,6 +21,12 @@ services:
         value: 0.0.0.0
       - key: TRUST_PROXY_HOPS
         value: "1"
+      # The API pings its own public URL (RENDER_EXTERNAL_URL, set by Render) every 10 minutes so
+      # the free instance never idles into sleep. Set to "false" on a paid always-on plan.
+      - key: KEEP_ALIVE
+        value: "true"
+      - key: KEEP_ALIVE_INTERVAL_MINUTES
+        value: "10"
       - key: MONGODB_DATABASE
         value: paisapulse
       - key: MONGODB_URI

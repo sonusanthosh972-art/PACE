@@ -11,6 +11,7 @@ import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { closeDb, connectDb } from './db/mongo.js';
 import { startDailySummaryCron } from './jobs/dailySummary.js';
+import { startKeepAlive, type KeepAlive } from './jobs/keepAlive.js';
 import { logger } from './logger.js';
 
 async function bootstrap() {
@@ -21,14 +22,18 @@ async function bootstrap() {
   logger.info(`[Bootstrap] Connected to database "${config.databaseName}" and ensured indexes.`);
 
   const cron = startDailySummaryCron();
+  let keepAlive: KeepAlive | null = null;
   const server = createApp(config).listen(config.port, config.host, () => {
     logger.info(`[PaisaPulse API] Listening on http://${config.host}:${config.port}`);
     if (!config.adminApiKey) {
       logger.warn('[PaisaPulse API] ADMIN_API_KEY not set: admin endpoints are disabled.');
     }
+    // Only once the server can answer its own pings.
+    keepAlive = startKeepAlive();
   });
 
   const shutdown = () => {
+    keepAlive?.stop();
     cron.stop();
     server.close(() => {
       void closeDb().finally(() => process.exit(0));
