@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-rea
 
 import { AppLogo } from '@/components/AppLogo';
 import { Amount } from '@/components/Amount';
-import { AppText } from '@/components/AppText';
+import { AppText, type TextColor } from '@/components/AppText';
 import { BudgetRing } from '@/components/BudgetRing';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -14,6 +14,7 @@ import { Icon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { TransactionRow } from '@/components/TransactionRow';
+import { cycleLeft } from '@/domain/budget';
 import { formatINRWhole } from '@/domain/money';
 import type { Transaction } from '@/domain/transaction';
 import { formatDayLabel } from '@/lib/format';
@@ -103,6 +104,7 @@ function SampleDataBanner() {
 
 function TodayContent({ data, importing }: { data: TodayData; importing: boolean }) {
   const { snapshot, transactions, streak } = data;
+  const left = cycleLeft(snapshot);
   const tone = ringTone(snapshot.usedRatio);
   const remaining = snapshot.remainingTodayPaise;
   const over = remaining < 0;
@@ -150,8 +152,17 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
           variant="hero"
           color={over ? 'coralText' : tone === 'warn' ? 'amberText' : 'text'}
           animated
+          fit
         />
-        <AppText variant="caption" color="muted" tabular>
+        <AppText
+          variant="caption"
+          color="muted"
+          tabular
+          center
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
           of {formatINRWhole(snapshot.todayBudgetPaise)} daily allowance
         </AppText>
       </BudgetRing>
@@ -159,13 +170,21 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
       <StatusLine tone={tone} usedRatio={snapshot.usedRatio} budget={snapshot.todayBudgetPaise} />
 
       <View style={styles.stats}>
-        <Stat label="Spent today" paise={snapshot.spentTodayPaise} />
+        <Stat
+          label="Spent today"
+          paise={snapshot.spentTodayPaise}
+          note={`of ${formatINRWhole(snapshot.todayBudgetPaise)} today`}
+        />
         <Stat
           label="Left until payday"
-          paise={Math.max(
-            0,
-            snapshot.spendablePaise - snapshot.spentBeforeTodayPaise - snapshot.spentTodayPaise,
-          )}
+          paise={left.leftPaise}
+          // Shows its working, so the number can be checked at a glance.
+          note={
+            left.overPaise > 0
+              ? `Over by ${formatINRWhole(left.overPaise)} this cycle`
+              : `${formatINRWhole(left.spentPaise)} spent of ${formatINRWhole(left.poolPaise)}`
+          }
+          noteColor={left.overPaise > 0 ? 'coralText' : 'muted'}
         />
       </View>
 
@@ -220,7 +239,7 @@ function StatusLine({
     budget === 0
       ? "This cycle's daily spendable pool is resting. Your essentials (rent, EMIs & savings) remain fully protected."
       : tone === 'over'
-        ? "A little over today — and that's completely okay! Tomorrow gently recalibrates so you stay balanced."
+        ? "A little over today — that's okay. Tomorrow starts fresh with the same allowance."
         : tone === 'warn'
           ? `You've used ${Math.round(usedRatio * 100)}% of today's allowance. Gentle, mindful spending for tonight.`
           : 'You are right on track. Peaceful, calm, and steady.';
@@ -244,14 +263,35 @@ function StatusLine({
   );
 }
 
-function Stat({ label, paise }: { label: string; paise: number }) {
+function Stat({
+  label,
+  paise,
+  note,
+  noteColor = 'muted',
+}: {
+  label: string;
+  paise: number;
+  note?: string;
+  noteColor?: TextColor;
+}) {
   const { colors } = useTheme();
   return (
     <View style={[styles.stat, { backgroundColor: colors.surface }]}>
       <AppText variant="caption" color="muted">
         {label}
       </AppText>
-      <Amount paise={paise} variant="heading" animated />
+      <Amount paise={paise} variant="heading" animated fit />
+      {note ? (
+        <AppText
+          variant="caption"
+          color={noteColor}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {note}
+        </AppText>
+      ) : null}
     </View>
   );
 }

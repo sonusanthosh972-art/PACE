@@ -83,7 +83,15 @@ export function DailyBars({
         <AppText variant="caption" color="muted">
           {first ? formatShortDate(first.date) : ''}
         </AppText>
-        <AppText variant="caption" color="muted">
+        <AppText
+          variant="caption"
+          color="muted"
+          style={styles.axisMiddle}
+          center
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+        >
           - - budget {formatINRWhole(typicalBudgetPaise)}/day
         </AppText>
         <AppText variant="caption" color="muted">
@@ -101,5 +109,6 @@ export function DailyBars({
 
 const styles = StyleSheet.create({
   wrap: { gap: SPACE.sm },
-  axis: { flexDirection: 'row', justifyContent: 'space-between' },
+  axis: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACE.sm },
+  axisMiddle: { flex: 1 },
 });

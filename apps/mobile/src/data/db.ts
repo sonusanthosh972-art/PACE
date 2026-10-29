@@ -103,6 +103,21 @@ export const MIGRATIONS: readonly string[] = [
     sync_state   TEXT NOT NULL DEFAULT 'pending' CHECK (sync_state IN ('pending', 'synced'))
   );
   `,
+  /* v4: repair profiles left without a budget start by sign-in-then-setup (it squeezed the whole
+     month into the days left). Uses the earliest stored payment, else today; re-syncs the profile
+     and recomputes today's budget. */ `
+  UPDATE profile SET
+    budget_start = COALESCE(
+      (SELECT date(MIN(occurred_at) / 1000, 'unixepoch', '+330 minutes') FROM transactions),
+      date('now', '+330 minutes')),
+    sync_state = 'pending'
+  WHERE budget_start IS NULL;
+  DELETE FROM daily_budgets WHERE date >= date('now', '+330 minutes');
+  `,
+  /* v5: the daily allowance is now a fixed share of the month (spendable ÷ days in the cycle)
+     instead of (money left ÷ days left). Recompute today; past days keep what they were judged by. */ `
+  DELETE FROM daily_budgets WHERE date >= date('now', '+330 minutes');
+  `,
 ];
 
 export async function migrate(db: SqlDb): Promise<number> {

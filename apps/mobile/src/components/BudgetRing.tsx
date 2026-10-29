@@ -71,7 +71,12 @@ export function BudgetRing({
           end={progress}
         />
       </Canvas>
-      <View style={styles.center} importantForAccessibility="no-hide-descendants">
+      {/* Content is kept inside the circle: ~70% of the diameter fits between the ring's sides
+          even on the lines above and below the centre. */}
+      <View
+        style={[styles.center, { width: Math.round(size * 0.7) }]}
+        importantForAccessibility="no-hide-descendants"
+      >
         {children}
       </View>
     </Animated.View>
@@ -80,5 +85,5 @@ export function BudgetRing({
 
 const styles = StyleSheet.create({
   wrap: { alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  center: { alignItems: 'center', justifyContent: 'center' },
 });

@@ -85,7 +85,7 @@ export default function PermissionsStep() {
       }
       await updateSetting('onboardingComplete', true);
       await invalidateAll(client);
-      router.dismissAll();
+      if (router.canDismiss()) router.dismissAll(); // nothing to dismiss → no POP_TO_TOP warning
       router.replace('/(tabs)');
       draft.reset();
       // Import runs after Today is on screen, with a progress note.

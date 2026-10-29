@@ -131,15 +131,15 @@ export function totalSpend(txs: readonly SpendLike[]): Paise {
   return Math.max(0, debits - refunds);
 }
 
-/** todayBudget = max(0, (spendable − spentBeforeToday) ÷ daysLeft), rounded to the paisa. */
-export function computeTodayBudget(args: {
-  spendablePaise: Paise;
-  spentBeforeTodayPaise: Paise;
-  daysLeft: number;
-}): Paise {
-  const remaining = args.spendablePaise - args.spentBeforeTodayPaise;
-  if (remaining <= 0) return 0;
-  return divideRound(remaining, Math.max(1, Math.trunc(args.daysLeft)));
+/**
+ * The fixed allowance for each day of the cycle: (salary − fixed costs − savings) ÷ days in the
+ * cycle, rounded to the paisa, never negative. It is the same every day: money not spent on one day
+ * does not pile up into later days, and overspending one day does not shrink the next.
+ */
+export function dailyAllowance(profile: BudgetProfile, cycle: Cycle): Paise {
+  const spendable = spendableForCycle(profile);
+  if (spendable <= 0) return 0;
+  return divideRound(spendable, cycle.totalDays);
 }
 
 /** remainingToday = todayBudget − spentToday (negative means overspent). */
@@ -160,8 +160,9 @@ export interface BudgetSnapshot {
 }
 
 /**
- * Full snapshot for a day. `frozenTodayBudgetPaise` is the value computed at 00:00 and stored;
- * when absent it is computed now from spending before today (which is what 00:00 would have seen).
+ * Full snapshot for a day. `frozenTodayBudgetPaise` is the value stored for the day; when absent
+ * it is today's fixed daily allowance. `spendablePaise` is the money for this cycle (prorated when
+ * the budget was set up part-way), used for "left until payday".
  */
 export function snapshotForDay(args: {
   profile: BudgetProfile;
@@ -173,13 +174,7 @@ export function snapshotForDay(args: {
   const cycle = cycleFor(args.today, args.profile.payday);
   const daysLeft = daysLeftInCycle(args.today, cycle);
   const spendablePaise = poolForCycle(args.profile, cycle);
-  const todayBudgetPaise =
-    args.frozenTodayBudgetPaise ??
-    computeTodayBudget({
-      spendablePaise,
-      spentBeforeTodayPaise: args.cycleSpendBeforeTodayPaise,
-      daysLeft,
-    });
+  const todayBudgetPaise = args.frozenTodayBudgetPaise ?? dailyAllowance(args.profile, cycle);
   const usedRatio =
     todayBudgetPaise > 0
       ? args.spentTodayPaise / todayBudgetPaise
@@ -196,6 +191,29 @@ export function snapshotForDay(args: {
     todayBudgetPaise,
     remainingTodayPaise: remainingToday(todayBudgetPaise, args.spentTodayPaise),
     usedRatio,
+  };
+}
+
+export interface CycleLeft {
+  /** Money for this cycle (prorated when the budget was set up part-way). */
+  poolPaise: Paise;
+  /** Spent this cycle so far, including today (spend − refunds). */
+  spentPaise: Paise;
+  /** poolPaise − spentPaise, never below 0: what is left until payday. */
+  leftPaise: Paise;
+  /** How far spending has gone past the cycle's money (0 when within it). */
+  overPaise: Paise;
+}
+
+/** "Left until payday": this cycle's money minus everything spent in it so far. */
+export function cycleLeft(snapshot: BudgetSnapshot): CycleLeft {
+  const spentPaise = snapshot.spentBeforeTodayPaise + snapshot.spentTodayPaise;
+  const balance = snapshot.spendablePaise - spentPaise;
+  return {
+    poolPaise: snapshot.spendablePaise,
+    spentPaise,
+    leftPaise: Math.max(0, balance),
+    overPaise: Math.max(0, -balance),
   };
 }
 

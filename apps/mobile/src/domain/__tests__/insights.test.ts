@@ -74,3 +74,12 @@ describe('insights', () => {
     expect(daily.get('2026-10-25')).toBe(20000);
   });
 });
+
+describe('dailySpend with refunds', () => {
+  it('nets a refund against the same day no matter which came first', () => {
+    const refund = tx({ amountPaise: 300_00, direction: 'credit', category: 'shopping' });
+    const buy = tx({ amountPaise: 1000_00, category: 'shopping' });
+    expect(dailySpend([refund, buy]).get('2026-10-24')).toBe(700_00);
+    expect(dailySpend([buy, refund]).get('2026-10-24')).toBe(700_00);
+  });
+});

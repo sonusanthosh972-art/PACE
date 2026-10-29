@@ -75,12 +75,13 @@ function Details({ tx }: { tx: Transaction }) {
     <View style={styles.stack}>
       <View style={styles.hero}>
         <AppText color="muted">{credit ? 'Received from' : 'Paid to'}</AppText>
-        <AppText variant="title" center>
+        <AppText variant="title" center numberOfLines={2}>
           {txTitle(tx)}
         </AppText>
         <Amount
           paise={tx.amountPaise}
           variant="hero"
+          fit
           exact
           prefix={credit ? '+' : ''}
           color={credit ? 'accentText' : 'text'}

@@ -75,7 +75,7 @@ function InsightsContent({
         <AppText color="muted">
           {formatShortDate(data.cycleStart)} – {formatShortDate(data.cycleEnd)}
         </AppText>
-        <Amount paise={data.totalSpentPaise} variant="hero" animated />
+        <Amount paise={data.totalSpentPaise} variant="hero" animated fit />
         <AppText color="muted">spent this cycle</AppText>
       </View>
 
@@ -86,7 +86,7 @@ function InsightsContent({
         <View style={styles.donutRow}>
           <DonutChart
             slices={data.byCategory}
-            totalPaise={data.totalSpentPaise}
+            totalPaise={data.categoryTotalPaise}
             size={168}
             stroke={22}
           />
@@ -94,8 +94,8 @@ function InsightsContent({
         <View style={styles.legend}>
           {data.byCategory.map((c) => {
             const pct =
-              data.totalSpentPaise > 0
-                ? Math.round((c.totalPaise / data.totalSpentPaise) * 100)
+              data.categoryTotalPaise > 0
+                ? Math.round((c.totalPaise / data.categoryTotalPaise) * 100)
                 : 0;
             return (
               <View
@@ -111,7 +111,14 @@ function InsightsContent({
                 <AppText color="muted" tabular>
                   {pct}%
                 </AppText>
-                <AppText variant="bodyStrong" tabular style={styles.amountCol}>
+                <AppText
+                  variant="bodyStrong"
+                  tabular
+                  style={styles.amountCol}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
                   {formatINRWhole(c.totalPaise)}
                 </AppText>
               </View>
@@ -139,7 +146,7 @@ function InsightsContent({
           helps you stay mindful.
         </AppText>
         <View style={styles.row}>
-          <Amount paise={data.leaks.totalPaise} variant="title" animated />
+          <Amount paise={data.leaks.totalPaise} variant="title" animated fit />
           <AppText color="muted" tabular>
             across {data.leaks.count} {data.leaks.count === 1 ? 'payment' : 'payments'}
           </AppText>
@@ -175,7 +182,14 @@ function InsightsContent({
                 {m.count} {m.count === 1 ? 'payment' : 'payments'}
               </AppText>
             </View>
-            <AppText variant="bodyStrong" tabular>
+            <AppText
+              variant="bodyStrong"
+              tabular
+              style={styles.amountCol}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.5}
+            >
               {formatINRWhole(m.totalPaise)}
             </AppText>
           </View>
@@ -231,7 +245,7 @@ const styles = StyleSheet.create({
   legend: { gap: SPACE.sm },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, minHeight: 32 },
   swatch: { width: 12, height: 12, borderRadius: 6 },
-  amountCol: { minWidth: 76, textAlign: 'right' },
+  amountCol: { minWidth: 76, maxWidth: '40%', textAlign: 'right' },
   rank: { width: 20 },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' },
   flex: { flex: 1 },

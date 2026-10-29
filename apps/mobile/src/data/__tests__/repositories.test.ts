@@ -6,6 +6,7 @@ import { MINUTE_MS, startOfDayMs } from '@/domain/time';
 import { getOrFreezeBudget, getSnapshot, getStreak } from '../budgetRepo';
 import { MIGRATIONS, migrate, type SqlDb } from '../db';
 import {
+  ensureBudgetStart,
   getProfile,
   markProfileSynced,
   profileNeedsSync,
@@ -257,10 +258,10 @@ describe('profile + budget', () => {
     expect(snap.todayBudgetPaise).toBe(166667);
     expect(snap.remainingTodayPaise).toBe(166667 - 420000);
 
-    // Next day: (50000 − 4200) / 29
+    // Next day: the same fixed allowance (50000 ÷ 30), whatever was spent on day 1
     const day2 = Date.UTC(2026, 8, 2, 3, 0);
     const snap2 = await getSnapshot(db, profile, day2);
-    expect(snap2.todayBudgetPaise).toBe(157931);
+    expect(snap2.todayBudgetPaise).toBe(166667);
     expect(await getStreak(db, day2)).toBe(0); // day 1 was over budget
   });
 
@@ -357,6 +358,70 @@ describe('profile sync version', () => {
     expect(await profileNeedsSync(db)).toBeNull();
   });
 
+  it('fills in a missing start date when the salary is saved after a sign-in restore', async () => {
+    // Restore on a fresh phone saves the account profile without a start date…
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 0, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    expect((await getProfile(db))?.startDate).toBeNull();
+    // …then onboarding saves the salary: the start must not stay empty.
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 50000_00, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+    );
+    expect((await getProfile(db))?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('ensureBudgetStart uses the earliest payment, else today, and re-syncs the profile', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    await markProfileSynced(db);
+    await ensureBudgetStart(db, '2026-10-29');
+    expect((await getProfile(db))?.startDate).toBe('2026-10-29');
+    expect(await profileNeedsSync(db)).not.toBeNull();
+
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    await addManual(
+      db,
+      {
+        amountPaise: 100,
+        category: 'food',
+        note: null,
+        merchant: null,
+        occurredAt: Date.UTC(2026, 8, 3, 6, 0),
+      },
+      clock,
+    );
+    await ensureBudgetStart(db, '2026-10-29');
+    expect((await getProfile(db))?.startDate).toBe('2026-09-03');
+  });
+
+  it('the v4 migration repairs profiles left without a start date', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    const v4 = MIGRATIONS[3];
+    if (!v4) throw new Error('v4 migration missing');
+    await db.execAsync(v4);
+    expect((await getProfile(db))?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it('keeps the budget start date when the profile is edited later', async () => {
     await saveProfile(db, { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 }, clock);
     const start = (await getProfile(db))?.startDate;
@@ -364,6 +429,65 @@ describe('profile sync version', () => {
     clock.advance(40 * 86_400_000);
     await saveProfile(db, { monthlySalaryPaise: 2, payday: 1, monthlySavingsGoalPaise: 0 }, clock);
     expect((await getProfile(db))?.startDate).toBe(start);
+  });
+});
+
+describe('budget start date repair', () => {
+  it('fills a missing start when the salary is saved after a sign-in restore', async () => {
+    // Sign-in restore on an empty phone saved the profile with no start date…
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 0, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    expect((await getProfile(db))?.startDate).toBeNull();
+    // …then the user entered their salary: the start must not stay empty.
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 50000_00, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+    );
+    expect((await getProfile(db))?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('uses the earliest stored payment, else today, and marks the profile for sync', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    await markProfileSynced(db);
+    await addManual(
+      db,
+      {
+        amountPaise: 100,
+        category: 'food',
+        note: null,
+        merchant: null,
+        occurredAt: Date.UTC(2026, 8, 3, 6, 0),
+      },
+      clock,
+    );
+    await ensureBudgetStart(db, '2026-10-29');
+    expect((await getProfile(db))?.startDate).toBe('2026-09-03');
+    expect(await profileNeedsSync(db)).not.toBeNull();
+
+    // An existing start is never changed.
+    await ensureBudgetStart(db, '2026-10-29');
+    expect((await getProfile(db))?.startDate).toBe('2026-09-03');
+  });
+
+  it('falls back to today when there are no payments', async () => {
+    await saveProfile(
+      db,
+      { monthlySalaryPaise: 1, payday: 1, monthlySavingsGoalPaise: 0 },
+      clock,
+      null,
+    );
+    await ensureBudgetStart(db, '2026-10-29');
+    expect((await getProfile(db))?.startDate).toBe('2026-10-29');
   });
 });
 

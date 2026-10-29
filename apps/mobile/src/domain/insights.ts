@@ -1,4 +1,4 @@
-import { countsAsRefund, countsAsSpend, type SpendLike } from './budget';
+import { countsAsRefund, countsAsSpend, totalSpend, type SpendLike } from './budget';
 import { CATEGORIES, type CategoryId } from './categories';
 import type { Paise } from './money';
 import { toDateKey, type DateKey } from './time';
@@ -92,15 +92,16 @@ export function essentialSplit(txs: readonly InsightTx[]): EssentialSplit {
   return { essentialPaise, nonEssentialPaise };
 }
 
+/** Net spend per day (spend − refunds, floored at zero), independent of the order of payments. */
 export function dailySpend(txs: readonly InsightTx[]): Map<DateKey, Paise> {
-  const map = new Map<DateKey, Paise>();
+  const byDay = new Map<DateKey, InsightTx[]>();
   for (const tx of txs) {
     const key = toDateKey(tx.occurredAt);
-    if (countsAsSpend(tx)) {
-      map.set(key, (map.get(key) ?? 0) + tx.amountPaise);
-    } else if (countsAsRefund(tx)) {
-      map.set(key, Math.max(0, (map.get(key) ?? 0) - tx.amountPaise));
-    }
+    byDay.set(key, [...(byDay.get(key) ?? []), tx]);
+  }
+  const map = new Map<DateKey, Paise>();
+  for (const [key, dayTxs] of byDay) {
+    if (dayTxs.some((t) => countsAsSpend(t) || countsAsRefund(t))) map.set(key, totalSpend(dayTxs));
   }
   return map;
 }

@@ -22,13 +22,9 @@ import { getProfile } from '@/data/profileRepo';
 import { getSettings, markOnce } from '@/data/settingsRepo';
 import { listTransactions } from '@/data/transactionsRepo';
 import {
-  budgetStartInCycle,
-  computeTodayBudget,
   countsAsSpend,
   cycleFor,
-  daysLeftInCycle,
-  poolForCycle,
-  totalSpend,
+  dailyAllowance,
   type BudgetProfile,
   type BudgetSnapshot,
 } from '@/domain/budget';
@@ -245,8 +241,8 @@ async function maybeWarn100(
 // ── Data builders ────────────────────────────────────────────────────────────
 
 /**
- * Computes the projected budget for a day WITHOUT prematurely inserting into `daily_budgets`.
- * Future days are projected from current spend; only the current day is frozen in DB.
+ * The allowance for a day WITHOUT prematurely inserting into `daily_budgets`: today's is stored,
+ * past days use what was stored, future days get the fixed daily allowance.
  */
 async function computeProjectedBudget(
   db: SqlDb,
@@ -269,20 +265,8 @@ async function computeProjectedBudget(
     if (existing) return existing.budget_paise;
   }
 
-  // For future days: compute projected budget without writing to daily_budgets table!
-  const cycle = cycleFor(targetDay, profile.payday);
-  const spentBefore = totalSpend(
-    await listTransactions(db, {
-      from: startOfDayMs(budgetStartInCycle(cycle, profile.startDate)),
-      to: startOfDayMs(targetDay),
-      limit: 100_000,
-    }),
-  );
-  return computeTodayBudget({
-    spendablePaise: poolForCycle(profile, cycle),
-    spentBeforeTodayPaise: spentBefore,
-    daysLeft: daysLeftInCycle(targetDay, cycle),
-  });
+  // Future days: the fixed daily allowance (nothing is stored for them yet).
+  return dailyAllowance(profile, cycleFor(targetDay, profile.payday));
 }
 
 async function buildMorningInput(

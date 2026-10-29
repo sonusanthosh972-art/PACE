@@ -1,5 +1,6 @@
 import {
-  computeTodayBudget,
+  cycleLeft,
+  dailyAllowance,
   countsAsSpend,
   cycleFor,
   daysLeftInCycle,
@@ -25,44 +26,51 @@ const PROFILE: BudgetProfile = {
   monthlySavingsGoalPaise: rupees(10000),
 };
 
-describe('required budget scenarios', () => {
-  it('salary 100000, fixed 40000, savings 10000, 30-day cycle, day 1 → ₹1,666.67/day', () => {
+describe('daily allowance: a fixed share of the month', () => {
+  it('salary 100000, fixed 40000, savings 10000, 30-day cycle → ₹1,666.67 every day', () => {
     const spendable = spendableForCycle(PROFILE);
     expect(spendable).toBe(rupees(50000));
     // September 2026 has 30 days, payday 1 → 30-day cycle.
     const cycle = cycleFor('2026-09-01', PROFILE.payday);
     expect(cycle.totalDays).toBe(30);
-    const daysLeft = daysLeftInCycle('2026-09-01', cycle);
-    expect(daysLeft).toBe(30);
-    expect(
-      computeTodayBudget({ spendablePaise: spendable, spentBeforeTodayPaise: 0, daysLeft }),
-    ).toBe(166667);
+    expect(dailyAllowance(PROFILE, cycle)).toBe(166667);
   });
 
-  it('overspend 4200 on day 1 → day 2 budget = (50000−4200)/29 = ₹1,579.31', () => {
-    const cycle = cycleFor('2026-09-02', PROFILE.payday);
-    const daysLeft = daysLeftInCycle('2026-09-02', cycle);
-    expect(daysLeft).toBe(29);
-    expect(
-      computeTodayBudget({
-        spendablePaise: spendableForCycle(PROFILE),
-        spentBeforeTodayPaise: rupees(4200),
-        daysLeft,
-      }),
-    ).toBe(157931);
+  it('is the same on every day of the cycle, however much was or was not spent before', () => {
+    for (const today of ['2026-09-01', '2026-09-02', '2026-09-28', '2026-09-30']) {
+      for (const spentBefore of [0, rupees(4200), rupees(49000)]) {
+        const s = snapshotForDay({
+          profile: PROFILE,
+          today,
+          cycleSpendBeforeTodayPaise: spentBefore,
+          spentTodayPaise: 0,
+        });
+        expect(s.todayBudgetPaise).toBe(166667);
+      }
+    }
   });
 
-  it('spendable already exhausted → todayBudget 0, never negative', () => {
-    expect(
-      computeTodayBudget({
-        spendablePaise: rupees(50000),
-        spentBeforeTodayPaise: rupees(52000),
-        daysLeft: 10,
-      }),
-    ).toBe(0);
-    expect(
-      computeTodayBudget({ spendablePaise: -rupees(500), spentBeforeTodayPaise: 0, daysLeft: 3 }),
-    ).toBe(0);
+  it('salary 50000 with 3 days left does not pile the unspent month into those 3 days', () => {
+    const profile: BudgetProfile = {
+      monthlySalaryPaise: rupees(50000),
+      payday: 1,
+      fixedExpenses: [],
+      monthlySavingsGoalPaise: rupees(20000),
+      startDate: '2026-08-01',
+    };
+    const s = snapshotForDay({
+      profile,
+      today: '2026-10-29', // 29, 30, 31 left in a 31-day October cycle
+      cycleSpendBeforeTodayPaise: 0,
+      spentTodayPaise: 0,
+    });
+    expect(s.daysLeft).toBe(3);
+    expect(s.todayBudgetPaise).toBe(96774); // ₹30,000 ÷ 31 = ₹967.74, not ₹30,000 ÷ 3 = ₹10,000
+  });
+
+  it('is 0, never negative, when fixed costs and savings use up the salary', () => {
+    const cycle = cycleFor('2026-09-01', 1);
+    expect(dailyAllowance({ ...PROFILE, monthlySavingsGoalPaise: rupees(70000) }, cycle)).toBe(0);
   });
 });
 
@@ -171,22 +179,22 @@ describe('snapshotForDay', () => {
     expect(s.remainingTodayPaise).toBe(157931 - 30000);
   });
 
-  it('computes when nothing is frozen yet', () => {
+  it('uses the daily allowance when nothing is frozen yet', () => {
     const s = snapshotForDay({
       profile: PROFILE,
       today: '2026-09-02',
       cycleSpendBeforeTodayPaise: rupees(4200),
       spentTodayPaise: 0,
     });
-    expect(s.todayBudgetPaise).toBe(157931);
+    expect(s.todayBudgetPaise).toBe(166667);
     expect(s.usedRatio).toBe(0);
   });
 
   it('reports a used ratio of 1 when the budget is zero but money was spent', () => {
     const s = snapshotForDay({
-      profile: PROFILE,
+      profile: { ...PROFILE, monthlySavingsGoalPaise: rupees(70000) },
       today: '2026-09-20',
-      cycleSpendBeforeTodayPaise: rupees(60000),
+      cycleSpendBeforeTodayPaise: 0,
       spentTodayPaise: rupees(10),
     });
     expect(s.todayBudgetPaise).toBe(0);
@@ -204,7 +212,7 @@ describe('setting up part-way through a cycle', () => {
     );
   });
 
-  it('gives the normal per-day pace on the setup day, not the whole month in the days left', () => {
+  it('gives the normal daily allowance on the setup day, not the whole month in the days left', () => {
     const s = snapshotForDay({
       profile: { ...PROFILE, startDate: '2026-10-28' },
       today: '2026-10-28',
@@ -219,6 +227,63 @@ describe('setting up part-way through a cycle', () => {
     expect(poolForCycle({ ...PROFILE, startDate: '2026-10-01' }, cycle)).toBe(rupees(50000));
     expect(poolForCycle({ ...PROFILE, startDate: '2026-09-15' }, cycle)).toBe(rupees(50000));
     expect(poolForCycle({ ...PROFILE, startDate: null }, cycle)).toBe(rupees(50000));
+  });
+});
+
+describe('left until payday', () => {
+  // ₹31,000 a month over a 31-day October, no fixed costs → ₹1,000 a day.
+  const profile: BudgetProfile = {
+    monthlySalaryPaise: rupees(31000),
+    payday: 1,
+    fixedExpenses: [],
+    monthlySavingsGoalPaise: 0,
+    startDate: '2026-07-31',
+  };
+
+  it('is the cycle money minus everything spent in it, including today', () => {
+    const snap = snapshotForDay({
+      profile,
+      today: '2026-10-29',
+      cycleSpendBeforeTodayPaise: rupees(17950),
+      spentTodayPaise: rupees(200),
+    });
+    expect(cycleLeft(snap)).toEqual({
+      poolPaise: rupees(31000),
+      spentPaise: rupees(18150),
+      leftPaise: rupees(12850),
+      overPaise: 0,
+    });
+  });
+
+  it('equals the remaining days’ allowances when every day was spent exactly to plan', () => {
+    const snap = snapshotForDay({
+      profile,
+      today: '2026-10-29',
+      cycleSpendBeforeTodayPaise: rupees(28 * 1000), // 1–28 Oct at ₹1,000/day
+      spentTodayPaise: 0,
+    });
+    expect(cycleLeft(snap).leftPaise).toBe(snap.daysLeft * snap.todayBudgetPaise);
+  });
+
+  it('shows how far over the cycle money spending has gone, instead of just ₹0', () => {
+    const snap = snapshotForDay({
+      profile,
+      today: '2026-10-29',
+      cycleSpendBeforeTodayPaise: rupees(33000),
+      spentTodayPaise: rupees(500),
+    });
+    expect(cycleLeft(snap)).toMatchObject({ leftPaise: 0, overPaise: rupees(2500) });
+  });
+
+  it('counts only from the setup day when the budget was set up part-way', () => {
+    const snap = snapshotForDay({
+      profile: { ...profile, startDate: '2026-10-29' },
+      today: '2026-10-29',
+      cycleSpendBeforeTodayPaise: 0,
+      spentTodayPaise: 0,
+    });
+    // 3 days covered (29–31) → ₹3,000 = 3 × ₹1,000.
+    expect(cycleLeft(snap)).toMatchObject({ poolPaise: rupees(3000), leftPaise: rupees(3000) });
   });
 });
 

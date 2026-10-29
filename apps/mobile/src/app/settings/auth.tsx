@@ -96,7 +96,7 @@ export default function AuthScreen() {
         router.back();
         return;
       }
-      router.dismissAll();
+      if (router.canDismiss()) router.dismissAll(); // nothing to dismiss → no POP_TO_TOP warning
       router.replace(next);
     },
     [queryClient],

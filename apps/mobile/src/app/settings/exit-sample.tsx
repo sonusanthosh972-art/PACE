@@ -27,7 +27,7 @@ export default function ExitSample() {
       resetDraft();
       client.clear();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      router.dismissAll();
+      if (router.canDismiss()) router.dismissAll(); // nothing to dismiss → no POP_TO_TOP warning
       router.replace('/onboarding');
     } catch {
       setError('Could not remove the sample data. Please try again.');

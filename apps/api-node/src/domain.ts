@@ -150,25 +150,11 @@ export function daysLeftInCycle(today: DateKey, cycle: Cycle): number {
   return Math.max(1, diffDays(today, cycle.end) + 1);
 }
 
-/** max(0, (spendable − spentBeforeToday) ÷ daysLeft), rounded to the paisa. */
-export function computeTodayBudget(spendablePaise: number, spentBeforeTodayPaise: number, daysLeft: number): number {
-  const remaining = spendablePaise - spentBeforeTodayPaise;
-  if (remaining <= 0) return 0;
-  return Math.round(remaining / Math.max(1, Math.trunc(daysLeft)));
-}
-
 /**
- * First day whose spending counts in this cycle: the setup day when the budget was set up
- * part-way through the cycle, otherwise the cycle start. Same rule as the mobile app.
+ * The fixed allowance for each day of the cycle: spendable ÷ days in the cycle, rounded to the
+ * paisa, never negative. Same rule as the phone: unspent money does not pile into later days.
  */
-export function budgetStartInCycle(cycle: Cycle, startDate?: DateKey | null): DateKey {
-  return startDate && startDate > cycle.start && startDate <= cycle.end ? startDate : cycle.start;
-}
-
-/** Money for the cycle; a cycle joined part-way gets spendable × coveredDays ÷ totalDays. */
-export function poolForCycle(spendablePaise: number, cycle: Cycle, startDate?: DateKey | null): number {
-  const from = budgetStartInCycle(cycle, startDate);
-  if (from === cycle.start) return spendablePaise;
-  const coveredDays = diffDays(from, cycle.end) + 1;
-  return Math.round((spendablePaise * coveredDays) / cycle.totalDays);
+export function dailyAllowance(spendablePaise: number, cycle: Cycle): number {
+  if (spendablePaise <= 0) return 0;
+  return Math.round(spendablePaise / cycle.totalDays);
 }

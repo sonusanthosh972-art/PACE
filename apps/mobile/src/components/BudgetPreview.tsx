@@ -1,13 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import {
-  computeTodayBudget,
-  cycleFor,
-  daysLeftInCycle,
-  poolForCycle,
-  spendableForCycle,
-  type BudgetProfile,
-} from '@/domain/budget';
+import { cycleFor, dailyAllowance, spendableForCycle, type BudgetProfile } from '@/domain/budget';
 import { formatINRWhole } from '@/domain/money';
 import { useTodayKey } from '@/lib/useTodayKey';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -21,17 +14,8 @@ export function BudgetPreview({ profile }: { profile: BudgetProfile }) {
   const spendable = spendableForCycle(profile);
   const today = useTodayKey();
   const cycle = cycleFor(today, profile.payday);
-  const perDay = computeTodayBudget({
-    spendablePaise: spendable,
-    spentBeforeTodayPaise: 0,
-    daysLeft: cycle.totalDays,
-  });
-  // Before setup there is no start date yet: setting up today prorates this cycle from today.
-  const fromToday = computeTodayBudget({
-    spendablePaise: poolForCycle({ ...profile, startDate: profile.startDate ?? today }, cycle),
-    spentBeforeTodayPaise: 0,
-    daysLeft: daysLeftInCycle(today, cycle),
-  });
+  // Exactly what the Today screen will show each day of this cycle.
+  const perDay = dailyAllowance(profile, cycle);
 
   return (
     <View
@@ -53,14 +37,17 @@ export function BudgetPreview({ profile }: { profile: BudgetProfile }) {
           <AppText variant="caption" color="muted">
             That leaves you
           </AppText>
-          <AppText variant="title" tabular>
+          <AppText
+            variant="title"
+            tabular
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
             {formatINRWhole(perDay)} / day
           </AppText>
           <AppText variant="caption" color="muted" tabular>
-            {formatINRWhole(spendable)} a month to spend
-            {formatINRWhole(fromToday) !== formatINRWhole(perDay)
-              ? ` · ${formatINRWhole(fromToday)}/day for the rest of this cycle`
-              : ''}
+            {formatINRWhole(spendable)} a month to spend · {cycle.totalDays} days this cycle
           </AppText>
         </>
       )}

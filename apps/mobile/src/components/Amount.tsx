@@ -15,6 +15,8 @@ interface AmountProps {
   animated?: boolean;
   prefix?: string;
   suffix?: string;
+  /** Stay on one line and shrink the text to the available width (e.g. inside the ring). */
+  fit?: boolean;
 }
 
 /** A rupee amount with tabular digits. The accessibility label always carries the final value. */
@@ -26,6 +28,7 @@ export function Amount({
   animated = false,
   prefix = '',
   suffix = '',
+  fit = false,
 }: AmountProps) {
   const { reducedMotion } = useTheme();
   const shown = useCountUp(paise, { animate: animated && !reducedMotion });
@@ -36,6 +39,7 @@ export function Amount({
       color={color}
       tabular
       accessibilityLabel={`${prefix}${format(paise)}${suffix}`}
+      {...(fit ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.4 } : null)}
     >
       {prefix}
       {format(shown)}

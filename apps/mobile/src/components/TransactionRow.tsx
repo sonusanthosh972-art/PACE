@@ -75,6 +75,7 @@ export function TransactionRow({ tx, onPress, showTime = true }: Props) {
           variant="bodyStrong"
           color={credit ? 'accentText' : 'text'}
           prefix={credit ? '+' : ''}
+          fit
         />
         {tx.isExcluded ? (
           <AppText variant="caption" color="muted">
@@ -105,5 +106,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   middle: { flex: 1, gap: 2 },
-  right: { alignItems: 'flex-end', gap: 2 },
+  // Capped so a very large amount shrinks instead of squeezing the merchant name away.
+  right: { alignItems: 'flex-end', gap: 2, maxWidth: '45%' },
 });

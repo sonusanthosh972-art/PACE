@@ -6,7 +6,7 @@ import { dayResults, getSnapshot, getStreak } from '@/data/budgetRepo';
 import { getProfile } from '@/data/profileRepo';
 import { getSettings } from '@/data/settingsRepo';
 import { getById, listTransactions, type TxFilter } from '@/data/transactionsRepo';
-import { cycleFor, type BudgetSnapshot } from '@/domain/budget';
+import { cycleFor, totalSpend, type BudgetSnapshot } from '@/domain/budget';
 import {
   dailySpend,
   essentialSplit,
@@ -88,7 +88,10 @@ export interface InsightsData {
   cycleStart: DateKey;
   cycleEnd: DateKey;
   today: DateKey;
+  /** Spend − refunds this cycle: the same number the home screen counts. */
   totalSpentPaise: number;
+  /** Σ spend by category before refunds: the base for category percentages. */
+  categoryTotalPaise: number;
   byCategory: ReturnType<typeof totalsByCategory>;
   leaks: ReturnType<typeof smallLeaks>;
   merchants: ReturnType<typeof topMerchants>;
@@ -136,7 +139,8 @@ export function useInsights() {
         cycleStart: cycle.start,
         cycleEnd: cycle.end,
         today,
-        totalSpentPaise: byCategory.reduce((s, c) => s + c.totalPaise, 0),
+        totalSpentPaise: totalSpend(txs),
+        categoryTotalPaise: byCategory.reduce((s, c) => s + c.totalPaise, 0),
         byCategory,
         leaks: smallLeaks(txs),
         merchants: topMerchants(txs, 5),

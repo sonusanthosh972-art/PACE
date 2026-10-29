@@ -79,12 +79,20 @@ export function DonutChart({
         ))}
       </Canvas>
       <View style={styles.center} importantForAccessibility="no-hide-descendants">
-        <AppText variant="caption" color="muted">
-          This cycle
-        </AppText>
-        <AppText variant="heading" tabular>
-          {formatINRWhole(totalPaise)}
-        </AppText>
+        <View style={{ width: Math.round((size - stroke * 2) * 0.8), alignItems: 'center' }}>
+          <AppText variant="caption" color="muted">
+            This cycle
+          </AppText>
+          <AppText
+            variant="heading"
+            tabular
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {formatINRWhole(totalPaise)}
+          </AppText>
+        </View>
       </View>
     </View>
   );

@@ -104,21 +104,29 @@ insightsRouter.get('/daily', async (req: AuthenticatedRequest, res: Response): P
   }
   const { today, cycle, txs } = data;
 
-  const days = new Map<DateKey, { totalSpendPaise: number; count: number }>();
+  // Spend and refunds are summed separately and netted at the end, so the order of payments
+  // within a day never changes the result.
+  const days = new Map<DateKey, { spend: number; refunds: number; count: number }>();
   for (let key = cycle.start; key <= today; key = addDays(key, 1)) {
-    days.set(key, { totalSpendPaise: 0, count: 0 });
+    days.set(key, { spend: 0, refunds: 0, count: 0 });
   }
 
   for (const t of txs) {
     const day = days.get(toDateKey(t.occurredAt));
     if (!day) continue;
     if (countsAsSpend(t)) {
-      day.totalSpendPaise += t.amountPaise;
+      day.spend += t.amountPaise;
       day.count += 1;
     } else if (countsAsRefund(t)) {
-      day.totalSpendPaise = Math.max(0, day.totalSpendPaise - t.amountPaise);
+      day.refunds += t.amountPaise;
     }
   }
 
-  res.status(200).json([...days.entries()].map(([dateKey, v]) => ({ dateKey, ...v })));
+  res.status(200).json(
+    [...days.entries()].map(([dateKey, v]) => ({
+      dateKey,
+      totalSpendPaise: Math.max(0, v.spend - v.refunds),
+      count: v.count,
+    })),
+  );
 });

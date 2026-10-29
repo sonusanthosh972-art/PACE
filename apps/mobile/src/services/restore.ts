@@ -1,6 +1,7 @@
 import { clearBudgetsFrom } from '@/data/budgetRepo';
 import type { SqlDb } from '@/data/db';
 import {
+  ensureBudgetStart,
   getProfile,
   markProfileSynced,
   replaceFixedExpenses,
@@ -64,7 +65,8 @@ export async function restoreFromServer(
           monthlySavingsGoalPaise: remoteProfile.savingsGoalPaise,
         },
         clock,
-        // Keep this phone's start date; on a fresh install use the account's.
+        // Keep this phone's start date; on a fresh install use the account's (filled in below
+        // from the restored payments when the account has none).
         localProfile ? undefined : (remoteProfile.budgetStartDate ?? null),
       );
       restoredProfile = true;
@@ -186,7 +188,10 @@ export async function restoreFromServer(
     page++;
   }
 
-  // 4. Recompute daily budget with restored profile and transactions
+  // 4. A profile must have a budget start, or the whole month lands in the days left in the cycle.
+  await ensureBudgetStart(db, toDateKey(Date.now()));
+
+  // 5. Recompute daily budget with restored profile and transactions
   await clearBudgetsFrom(db, toDateKey(Date.now()));
 
   return { restoredProfile, restoredTransactions };

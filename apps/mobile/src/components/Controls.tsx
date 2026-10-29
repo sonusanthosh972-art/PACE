@@ -124,7 +124,7 @@ export function ListRow({ icon, title, value, subtitle, onPress, danger, right }
         ) : null}
       </View>
       {value ? (
-        <AppText color="muted" tabular>
+        <AppText color="muted" tabular numberOfLines={1} style={styles.listValue}>
           {value}
         </AppText>
       ) : null}
@@ -242,6 +242,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
   },
   listMiddle: { flex: 1, gap: 2 },
+  listValue: { maxWidth: '40%' },
   section: { marginTop: SPACE.md, textTransform: 'uppercase', letterSpacing: 0.8 },
   stepHeader: { gap: SPACE.sm, marginBottom: SPACE.md },
   dots: { flexDirection: 'row', gap: 6, marginBottom: SPACE.sm },

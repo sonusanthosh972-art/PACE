@@ -351,9 +351,28 @@ describe('deleting and batching', () => {
 });
 
 describe('insights and nightly job', () => {
-  it('prorates the cycle the budget was set up in, like the phone', async () => {
+  it('nets a refund in the daily view even when it arrives before the purchase', async () => {
+    const { auth } = await register();
+    const now = Date.now();
+    await call(
+      'POST',
+      '/api/v1/transactions/sync',
+      {
+        transactions: [
+          mobileTx({ id: 'r1', dedupeHash: '5'.repeat(64), amountPaise: 300_00, direction: 'credit', category: 'shopping', occurredAt: now - 2000 }),
+          mobileTx({ id: 'b1', dedupeHash: '6'.repeat(64), amountPaise: 1000_00, category: 'shopping', occurredAt: now - 1000 }),
+        ],
+      },
+      auth,
+    );
+    const daily = await call('GET', '/api/v1/insights/daily', undefined, auth);
+    const today = daily.json.find((d: { dateKey: string }) => d.dateKey === toDateKey(now));
+    assert.equal(today.totalSpendPaise, 700_00);
+  });
+
+  it('uses the fixed daily allowance (spendable ÷ days in cycle), like the phone', async () => {
     const { auth, email } = await register();
-    // ₹31,000 spendable over 31 days; set up on the 28th → 4 days covered → ₹4,000 → ₹1,000/day.
+    // ₹31,000 spendable over a 31-day October → ₹1,000 every day, including late in the month.
     await call(
       'PUT',
       '/api/v1/me/profile',
@@ -365,6 +384,8 @@ describe('insights and nightly job', () => {
     assert.equal(user.budgetStartDate, '2026-10-28');
     const summary = await buildSummaryForUser(user, '2026-10-28');
     assert.equal(summary.budgetPaise, 1_000_00);
+    // Not ₹31,000 ÷ 3 days left on the 29th.
+    assert.equal((await buildSummaryForUser(user, '2026-10-29')).budgetPaise, 1_000_00);
   });
 
   it('catches up missing days once, and never runs on two instances at the same time', async () => {

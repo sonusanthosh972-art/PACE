@@ -9,7 +9,11 @@ const mockReplace = jest.fn();
 
 jest.mock('@/services/actions', () => ({ deleteAllData: () => mockDeleteAll() }));
 jest.mock('expo-router', () => ({
-  router: { replace: (...a: unknown[]) => mockReplace(...a), dismissAll: jest.fn() },
+  router: {
+    replace: (...a: unknown[]) => mockReplace(...a),
+    dismissAll: jest.fn(),
+    canDismiss: jest.fn(() => false),
+  },
 }));
 
 function renderScreen() {

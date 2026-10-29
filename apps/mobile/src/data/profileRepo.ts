@@ -55,8 +55,9 @@ export async function getProfile(db: SqlDb): Promise<BudgetProfile | null> {
 }
 
 /**
- * The first save records today as the budget start; later edits keep it. Pass `startDate` to set
- * it explicitly (null = no proration, e.g. a restored account whose history is all on the phone).
+ * The first save records today as the budget start; later edits keep it, and fill it in with today
+ * if it is still missing (a missing start squeezes the whole month into the days left). Pass
+ * `startDate` to set it explicitly (null = no proration, e.g. sample data covering the cycle).
  */
 export async function saveProfile(
   db: SqlDb,
@@ -72,7 +73,8 @@ export async function saveProfile(
      VALUES (1, ?, ?, ?, ?, ?, 'pending')
      ON CONFLICT(id) DO UPDATE SET salary_paise = excluded.salary_paise, payday = excluded.payday,
        savings_goal_paise = excluded.savings_goal_paise,
-       budget_start = CASE WHEN ? THEN profile.budget_start ELSE excluded.budget_start END,
+       budget_start = CASE WHEN ? THEN COALESCE(profile.budget_start, excluded.budget_start)
+                      ELSE excluded.budget_start END,
        updated_at = excluded.updated_at, sync_state = 'pending'`,
     [
       p.monthlySalaryPaise,
@@ -82,6 +84,21 @@ export async function saveProfile(
       now,
       keepStart ? 1 : 0,
     ],
+  );
+}
+
+/**
+ * Gives a profile with no budget start one: the day of the earliest stored payment (so restored or
+ * SMS-imported history keeps counting), else `today`. Marks it for sync so the server learns it too.
+ */
+export async function ensureBudgetStart(db: SqlDb, today: DateKey): Promise<void> {
+  await db.runAsync(
+    `UPDATE profile SET
+       budget_start = COALESCE(
+         (SELECT date(MIN(occurred_at) / 1000, 'unixepoch', '+330 minutes') FROM transactions), ?),
+       sync_state = 'pending'
+     WHERE id = 1 AND budget_start IS NULL`,
+    [today],
   );
 }
 

@@ -1,10 +1,8 @@
 import {
   budgetStartInCycle,
   cycleFor,
-  daysLeftInCycle,
-  computeTodayBudget,
+  dailyAllowance,
   onBudgetStreak,
-  poolForCycle,
   snapshotForDay,
   type BudgetProfile,
   type BudgetSnapshot,
@@ -40,9 +38,8 @@ async function spendBetween(db: SqlDb, fromMs: number, toMs: number): Promise<nu
 }
 
 /**
- * Returns today's budget, computing and freezing it on first access of the day.
- * The frozen value is what "00:00" saw: it only depends on spending before today, so it is the
- * same whether it is first computed at 00:01 or 14:00.
+ * Returns the day's allowance, storing it on first access so past days keep the value they were
+ * judged against (streaks, yesterday's line) even if the salary is edited later.
  */
 export async function getOrFreezeBudget(
   db: SqlDb,
@@ -57,13 +54,7 @@ export async function getOrFreezeBudget(
   if (existing) return existing.budget_paise;
 
   const cycle = cycleFor(today, profile.payday);
-  const from = budgetStartInCycle(cycle, profile.startDate);
-  const spentBefore = await spendBetween(db, startOfDayMs(from), startOfDayMs(today));
-  const budget = computeTodayBudget({
-    spendablePaise: poolForCycle(profile, cycle),
-    spentBeforeTodayPaise: spentBefore,
-    daysLeft: daysLeftInCycle(today, cycle),
-  });
+  const budget = dailyAllowance(profile, cycle);
   await db.runAsync(
     'INSERT OR IGNORE INTO daily_budgets (date, budget_paise, computed_at) VALUES (?, ?, ?)',
     [today, budget, now],
@@ -104,11 +95,13 @@ export async function dayResults(
     [sinceDay, untilDay],
   );
   if (budgets.length === 0) return [];
-  // Per-day spend (debits only, as before), grouped by IST day inside SQLite.
+  // Net spend per IST day (spend − refunds, floored at zero): the same rule as "Spent today".
   const rows = await db.getAllAsync<{ day: string; spent: number }>(
-    `SELECT date((occurred_at + ?) / 1000, 'unixepoch') AS day, SUM(amount_paise) AS spent
+    `SELECT date((occurred_at + ?) / 1000, 'unixepoch') AS day,
+            MAX(0, COALESCE(SUM(CASE WHEN ${SPEND_SQL} THEN amount_paise END), 0)
+                 - COALESCE(SUM(CASE WHEN ${REFUND_SQL} THEN amount_paise END), 0)) AS spent
      FROM transactions
-     WHERE occurred_at >= ? AND occurred_at < ? AND ${SPEND_SQL}
+     WHERE occurred_at >= ? AND occurred_at < ?
      GROUP BY day`,
     [IST_OFFSET_MS, startOfDayMs(sinceDay), startOfDayMs(untilDay)],
   );
