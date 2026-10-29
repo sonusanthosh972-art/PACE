@@ -31,8 +31,16 @@ log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
 # ============================================================
 
 detect_language() {
+  if [ -f "scripts/check.sh" ] || [ -f "../scripts/check.sh" ]; then
+    echo "project"
+    return
+  fi
   if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
     if grep -q "vitest\|jest\|mocha" package.json 2>/dev/null; then
+      echo "typescript"
+      return
+    fi
+    if [ -d "apps" ] || [ -d "src" ]; then
       echo "typescript"
       return
     fi
@@ -265,11 +273,26 @@ verify_go() {
   fi
 }
 
+verify_project() {
+  local script="./scripts/check.sh"
+  if [ ! -f "$script" ] && [ -f "../scripts/check.sh" ]; then
+    script="../scripts/check.sh"
+  fi
+  log_info "Running project verification suite ($script)..."
+  echo ""
+  if bash "$script"; then
+    log_pass "Project check suite passed"
+  else
+    log_fail "Project check suite FAILED"
+  fi
+}
+
 # ============================================================
 # Run detection
 # ============================================================
 
 case "$LANG" in
+  project) verify_project ;;
   typescript|ts) verify_typescript ;;
   python|py) verify_python ;;
   rust|rs) verify_rust ;;

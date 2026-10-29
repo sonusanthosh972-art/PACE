@@ -20,6 +20,7 @@ import { PICKABLE_CATEGORIES, type CategoryId } from '@/domain/categories';
 import { addDays, startOfDayMs, toDateKey, type DateKey } from '@/domain/time';
 import type { Mode, Transaction } from '@/domain/transaction';
 import { formatDayLabel, MODE_LABELS } from '@/lib/format';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { useTodayKey } from '@/lib/useTodayKey';
 import { setTransactionExcluded } from '@/services/actions';
 import { invalidateAll, useProfile, useTransactions } from '@/state/queries';
@@ -60,6 +61,8 @@ export default function TransactionsScreen() {
   const [category, setCategory] = useState<CategoryId | null>(null);
 
   const today = useTodayKey();
+  // Query once typing pauses, not on every key press.
+  const searchQuery = useDebouncedValue(search.trim(), 250);
   const filter = useMemo<TxFilter>(() => {
     const f: TxFilter = { limit: 2000 };
     if (range === 'cycle' && profile.data)
@@ -67,9 +70,9 @@ export default function TransactionsScreen() {
     if (range === 'week') f.from = startOfDayMs(addDays(today, -6));
     if (mode) f.mode = mode;
     if (category) f.category = category;
-    if (search.trim()) f.search = search.trim();
+    if (searchQuery) f.search = searchQuery;
     return f;
-  }, [range, mode, category, search, today, profile.data]);
+  }, [range, mode, category, searchQuery, today, profile.data]);
 
   const txs = useTransactions(filter);
   const items = useMemo(() => groupByDay(txs.data ?? [], today), [txs.data, today]);

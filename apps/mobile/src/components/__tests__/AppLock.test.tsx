@@ -30,7 +30,19 @@ describe('AppLock component', () => {
     expect(queryByText('Paisa Pulse')).toBeNull();
   });
 
-  it('renders lock screen with Fingerprint as Option 1 and Normal Login as Option 2', async () => {
+  it('renders lock screen with Fingerprint and account password option for signed-in user', async () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 'u1',
+        email: 'sonu@example.com',
+        name: 'Sonu',
+        salaryPaise: 5000000,
+        payday: 1,
+        savingsGoalPaise: 1000000,
+        timezone: 'Asia/Kolkata',
+      },
+    });
     const { getByRole, getByText } = await render(<AppLock onboardingComplete={true} />);
 
     expect(getByRole('header', { name: 'Paisa Pulse' })).toBeTruthy();
@@ -39,8 +51,8 @@ describe('AppLock component', () => {
     // Option 1: Fingerprint
     expect(getByRole('button', { name: 'Unlock with Fingerprint' })).toBeTruthy();
 
-    // Option 2: Normal Login
-    expect(getByRole('button', { name: 'Normal Login' })).toBeTruthy();
+    // Option 2: Account Password
+    expect(getByRole('button', { name: 'Use account password' })).toBeTruthy();
   });
 
   it('unlocks when biometric authentication succeeds', async () => {
@@ -86,11 +98,11 @@ describe('AppLock component', () => {
       <AppLock onboardingComplete={true} />,
     );
 
-    // Press Normal Login
-    const normalLoginBtn = getByRole('button', { name: 'Normal Login' });
-    await fireEvent.press(normalLoginBtn);
+    // Press Use account password
+    const passwordLoginBtn = getByRole('button', { name: 'Use account password' });
+    await fireEvent.press(passwordLoginBtn);
 
-    expect(getByText('Sign In with Password')).toBeTruthy();
+    expect(getByText('Unlock with account password')).toBeTruthy();
 
     const passwordInput = getByPlaceholderText('••••••••');
     await fireEvent.changeText(passwordInput, 'validpassword');
@@ -105,15 +117,27 @@ describe('AppLock component', () => {
   });
 
   it('allows switching back to Fingerprint from normal login', async () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: 'u1',
+        email: 'sonu@example.com',
+        name: 'Sonu',
+        salaryPaise: 5000000,
+        payday: 1,
+        savingsGoalPaise: 1000000,
+        timezone: 'Asia/Kolkata',
+      },
+    });
     const { getByRole, getByText } = await render(<AppLock onboardingComplete={true} />);
 
-    await fireEvent.press(getByRole('button', { name: 'Normal Login' }));
-    expect(getByText('Sign In with Password')).toBeTruthy();
+    await fireEvent.press(getByRole('button', { name: 'Use account password' }));
+    expect(getByText('Unlock with account password')).toBeTruthy();
 
     const backButton = getByRole('button', { name: 'Back to Fingerprint' });
     await fireEvent.press(backButton);
 
     expect(getByRole('button', { name: 'Unlock with Fingerprint' })).toBeTruthy();
-    expect(getByRole('button', { name: 'Normal Login' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Use account password' })).toBeTruthy();
   });
 });

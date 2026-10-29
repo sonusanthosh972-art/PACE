@@ -27,13 +27,16 @@ export function setApiBaseUrl(url: string | null): void {
 }
 
 export function getApiBaseUrl(): string {
-  if (customBaseUrl) return customBaseUrl;
+  // A custom server address is a development tool; release builds always use the hosted API.
+  if (customBaseUrl && __DEV__) return customBaseUrl;
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
   return DEFAULT_API_URL;
 }
 
 /** A sleeping free-tier server (e.g. Render) can take up to a minute to wake up. */
 const CONNECTION_TEST_TIMEOUT_MS = 60_000;
+/** Every request gives up after this, so a stalled network never hangs a screen or sync. */
+const REQUEST_TIMEOUT_MS = 60_000;
 
 /**
  * Pings the server health endpoint to verify connectivity from device to server.
@@ -105,6 +108,7 @@ async function refreshAccessToken(): Promise<string | null> {
           Accept: 'application/json',
         },
         body: JSON.stringify({ refreshToken }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -208,10 +212,16 @@ export async function apiClient<T>(
     }
   }
 
+  // Release builds never send data over plain HTTP.
+  if (!__DEV__ && !url.startsWith('https://')) {
+    throw new ApiError('Insecure server address. Paisa Pulse only connects over HTTPS.', 0, false);
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
       ...options,
+      signal: options.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers,
       body:
         options.body !== undefined

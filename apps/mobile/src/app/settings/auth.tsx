@@ -6,6 +6,8 @@ import { Alert, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { AccountSecurity } from '@/components/account/AccountSecurity';
+import { ForgotPasswordForm } from '@/components/account/ForgotPasswordForm';
 import { Card } from '@/components/Card';
 import { ListRow, SectionTitle, Segmented } from '@/components/Controls';
 import { TextField } from '@/components/Fields';
@@ -73,6 +75,8 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Prefill the last signed-in email (the password is never stored)
   useEffect(() => {
@@ -333,8 +337,16 @@ export default function AuthScreen() {
           />
         </View>
 
-        <SectionTitle>Server connection</SectionTitle>
-        {renderServerConfig()}
+        <SectionTitle>Security</SectionTitle>
+        <AccountSecurity />
+
+        {/* Pointing the app at another server is a developer tool, not for release builds. */}
+        {__DEV__ ? (
+          <>
+            <SectionTitle>Server connection</SectionTitle>
+            {renderServerConfig()}
+          </>
+        ) : null}
 
         <SectionTitle>Session</SectionTitle>
         <View style={styles.group}>
@@ -376,55 +388,90 @@ export default function AuthScreen() {
         }}
       />
 
-      <View style={styles.form}>
-        {mode === 'register' ? (
+      {forgotOpen ? (
+        <ForgotPasswordForm
+          initialEmail={email}
+          onCancel={() => setForgotOpen(false)}
+          onDone={(resetEmail) => {
+            setForgotOpen(false);
+            setEmail(resetEmail);
+            setPassword('');
+            setMode('login');
+            setNotice('Password changed. Sign in with your new password.');
+          }}
+        />
+      ) : (
+        <View style={styles.form}>
+          {notice && mode === 'login' ? (
+            <AppText variant="caption" color="accentText" accessibilityRole="alert">
+              {notice}
+            </AppText>
+          ) : null}
+          {mode === 'register' ? (
+            <TextField
+              label="Name"
+              placeholder="Your name"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          ) : null}
+
           <TextField
-            label="Name"
-            placeholder="Your name"
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="words"
+            label="Email"
+            placeholder="you@example.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
             autoCorrect={false}
           />
-        ) : null}
 
-        <TextField
-          label="Email"
-          placeholder="you@example.com"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+          <TextField
+            label="Password"
+            placeholder="••••••••"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-        <TextField
-          label="Password"
-          placeholder="••••••••"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+          {error ? (
+            <AppText variant="caption" color="coralText" accessibilityRole="alert">
+              {error}
+            </AppText>
+          ) : null}
 
-        {error ? (
-          <AppText variant="caption" color="coralText" accessibilityRole="alert">
-            {error}
-          </AppText>
-        ) : null}
+          <Button
+            label={mode === 'register' ? 'Create Account' : 'Sign In'}
+            variant="primary"
+            loading={busy}
+            onPress={onSubmit}
+            icon={mode === 'register' ? 'person-add-outline' : 'log-in-outline'}
+          />
+          {mode === 'login' ? (
+            <Button
+              label="Forgot password?"
+              variant="ghost"
+              compact
+              onPress={() => {
+                setError(null);
+                setNotice(null);
+                setForgotOpen(true);
+              }}
+            />
+          ) : null}
+        </View>
+      )}
 
-        <Button
-          label={mode === 'register' ? 'Create Account' : 'Sign In'}
-          variant="primary"
-          loading={busy}
-          onPress={onSubmit}
-          icon={mode === 'register' ? 'person-add-outline' : 'log-in-outline'}
-        />
-      </View>
-
-      <SectionTitle>Server connection</SectionTitle>
-      {renderServerConfig()}
+      {__DEV__ ? (
+        <>
+          <SectionTitle>Server connection</SectionTitle>
+          {renderServerConfig()}
+        </>
+      ) : null}
 
       <Card style={styles.privacyCard}>
         <View style={styles.bulletRow}>

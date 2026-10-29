@@ -1,6 +1,11 @@
+import crypto from 'node:crypto';
 import express, { Request, Response } from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { pinoHttp } from 'pino-http';
+import { logger } from './logger.js';
 import type { ApiConfig } from './config.js';
 import { pingDb } from './db/mongo.js';
 import { recordRateLimitHit } from './metrics.js';
@@ -26,6 +31,23 @@ export function createApp(
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxyHops) app.set('trust proxy', config.trustProxyHops);
+
+  // Request id on every request and response, so a user's error can be found in the logs.
+  app.use(
+    pinoHttp({
+      logger,
+      genReqId: (req, res) => {
+        const incoming = req.headers['x-request-id'];
+        const id = typeof incoming === 'string' && /^[\w-]{8,64}$/.test(incoming) ? incoming : crypto.randomUUID();
+        res.setHeader('x-request-id', id);
+        return id;
+      },
+      customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'),
+      autoLogging: { ignore: (req) => req.url === '/health' },
+    }),
+  );
+  app.use(helmet());
+  app.use(compression());
   app.use(express.json({ limit: '2mb' }));
 
   // The phone app and the admin server call the API directly, so CORS stays off unless

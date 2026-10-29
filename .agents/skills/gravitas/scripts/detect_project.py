@@ -88,15 +88,24 @@ def main():
 
     language = detect_language(root)
     source_count = count_source_files(root, language)
-    has_tests = (root / "tests").exists() or (root / "test").exists() or (root / "spec").exists()
+    has_tests = (root / "tests").exists() or (root / "test").exists() or (root / "spec").exists() or bool(list(root.glob("**/__tests__"))) or bool(list(root.glob("**/*.test.*")))
+    validators = []
+    if (root / "scripts" / "check.sh").is_file():
+        validators.append({"id": "project-check", "kind": "test", "command": ["./scripts/check.sh"]})
+    elif (root / "package.json").is_file() and '"check":' in (root / "package.json").read_text():
+        validators.append({"id": "npm-check", "kind": "test", "command": ["npm", "run", "check"]})
+
     catalog = discover_validators(root) if _DISCOVERY else {"validators": [], "ci": []}
+    for v in catalog.get("validators", []):
+        if v not in validators:
+            validators.append(v)
     suggested_budget = suggest_budget(source_count, has_tests)
 
     result = {
         "language": language,
         "source_files": source_count,
         "has_tests": has_tests,
-        "validators": catalog["validators"],
+        "validators": validators,
         "ci": catalog.get("ci", []),
         "suggested_budget": suggested_budget,
         "root": str(root),

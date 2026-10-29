@@ -7,10 +7,25 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { closeDb, connectDb, getDb } from '../src/db/mongo.js';
-import { buildSummaryForUser } from '../src/jobs/dailySummary.js';
-import type { UserDoc } from '../src/db/models.js';
+import { acquireJobLock, buildSummaryForUser, releaseJobLock, runCatchUp } from '../src/jobs/dailySummary.js';
+import type { DailySummaryDoc, SessionDoc, UserDoc } from '../src/db/models.js';
+import { hashRefreshToken } from '../src/services/auth.js';
+import { setMailTransport, type Mail } from '../src/services/mailer.js';
+import { addDays, toDateKey } from '../src/domain.js';
 
 const ADMIN_KEY = 'a'.repeat(40);
+const sentMail: Mail[] = [];
+setMailTransport(async (mail) => {
+  sentMail.push(mail);
+});
+
+/** The 6-digit code from the newest email sent to `to`. */
+function lastCode(to: string): string {
+  const mail = [...sentMail].reverse().find((m) => m.to === to);
+  const code = mail?.text.match(/\b(\d{6})\b/)?.[1];
+  assert.ok(code, `no code emailed to ${to}`);
+  return code;
+}
 process.env.JWT_SECRET = 's'.repeat(48);
 
 let mongo: MongoMemoryServer;
@@ -62,7 +77,8 @@ function mobileTx(overrides: Record<string, unknown> = {}) {
 }
 
 before(async () => {
-  mongo = await MongoMemoryServer.create();
+  // Fail fast instead of hanging if the test MongoDB cannot start.
+  mongo = await MongoMemoryServer.create({ instance: { launchTimeout: 30_000 } });
   const config = loadConfig({ MONGODB_URI: mongo.getUri(), JWT_SECRET: process.env.JWT_SECRET, ADMIN_API_KEY: ADMIN_KEY });
   await connectDb(config.mongoUri, 'paisapulse_test');
   server = createApp(config, { authPerMinute: 1000, apiPerMinute: 1000 }).listen(0, '127.0.0.1');
@@ -71,9 +87,10 @@ before(async () => {
 });
 
 after(async () => {
-  await new Promise((r) => server.close(r));
+  // Safe even when `before` failed part-way.
+  if (server) await new Promise((r) => server.close(r));
   await closeDb();
-  await mongo.stop();
+  if (mongo) await mongo.stop();
 });
 
 beforeEach(async () => {
@@ -122,9 +139,108 @@ describe('auth', () => {
   it('stores only a hash of the refresh token', async () => {
     const { email, refreshToken } = await register();
     const user = await getDb().collection<UserDoc>('users').findOne({ email });
-    assert.ok(user?.refreshTokenHash);
-    assert.notEqual(user?.refreshTokenHash, refreshToken);
-    assert.equal(user?.refreshTokenHash?.length, 64);
+    const session = await getDb().collection<SessionDoc>('sessions').findOne({ userId: user?.id });
+    assert.ok(session?.tokenHash);
+    assert.notEqual(session?.tokenHash, refreshToken);
+    assert.equal(session?.tokenHash.length, 64);
+  });
+
+  it('keeps several devices signed in, and logout ends only that device', async () => {
+    const { email } = await register();
+    const login = () => call('POST', '/api/v1/auth/login', { email, password: 'password123' });
+    const phoneA = (await login()).json.refreshToken as string;
+    const phoneB = (await login()).json.refreshToken as string;
+
+    assert.equal((await call('POST', '/api/v1/auth/logout', { refreshToken: phoneA })).status, 204);
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken: phoneA })).status, 401);
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken: phoneB })).status, 200);
+    // Logging out twice (or with junk) is still fine.
+    assert.equal((await call('POST', '/api/v1/auth/logout', { refreshToken: phoneA })).status, 204);
+  });
+
+  it('accepts a refresh token issued before sessions existed, exactly once', async () => {
+    const { email } = await register();
+    const legacy = 'legacy-refresh-token-value';
+    await getDb()
+      .collection<UserDoc>('users')
+      .updateOne({ email }, { $set: { refreshTokenHash: hashRefreshToken(legacy), refreshTokenExpiresAt: new Date(Date.now() + 60_000) } });
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken: legacy })).status, 200);
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken: legacy })).status, 401);
+  });
+
+  it('locks the account after 5 wrong passwords, without revealing unknown emails', async () => {
+    const { email } = await register();
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await call('POST', '/api/v1/auth/login', { email, password: 'wrong-password' })).status, 401);
+    }
+    const locked = await call('POST', '/api/v1/auth/login', { email, password: 'password123' });
+    assert.equal(locked.status, 429);
+    const unknown = await call('POST', '/api/v1/auth/login', { email: 'nobody@example.com', password: 'x' });
+    assert.equal(unknown.status, 401);
+  });
+
+  it('resets a forgotten password with an emailed code and signs out every device', async () => {
+    const { email, refreshToken } = await register();
+    assert.equal((await call('POST', '/api/v1/auth/forgot-password', { email })).status, 202);
+    // Unknown emails get the same answer.
+    assert.equal((await call('POST', '/api/v1/auth/forgot-password', { email: 'nobody@example.com' })).status, 202);
+
+    const code = lastCode(email);
+    const wrong = code === '000000' ? '111111' : '000000';
+    assert.equal(
+      (await call('POST', '/api/v1/auth/reset-password', { email, code: wrong, newPassword: 'brand-new-pass' })).status,
+      400,
+    );
+    assert.equal(
+      (await call('POST', '/api/v1/auth/reset-password', { email, code, newPassword: 'brand-new-pass' })).status,
+      204,
+    );
+    // The code works once, old sessions are gone, the new password works.
+    assert.equal(
+      (await call('POST', '/api/v1/auth/reset-password', { email, code, newPassword: 'another-pass-1' })).status,
+      400,
+    );
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken })).status, 401);
+    assert.equal((await call('POST', '/api/v1/auth/login', { email, password: 'brand-new-pass' })).status, 200);
+  });
+
+  it('stops accepting a code after 5 wrong tries', async () => {
+    const { email } = await register();
+    await call('POST', '/api/v1/auth/forgot-password', { email });
+    const code = lastCode(email);
+    const wrong = code === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) {
+      await call('POST', '/api/v1/auth/reset-password', { email, code: wrong, newPassword: 'brand-new-pass' });
+    }
+    assert.equal(
+      (await call('POST', '/api/v1/auth/reset-password', { email, code, newPassword: 'brand-new-pass' })).status,
+      400,
+    );
+  });
+
+  it('verifies the email with the code sent at sign-up', async () => {
+    const { email, auth } = await register();
+    assert.equal((await call('GET', '/api/v1/me/profile', undefined, auth)).json.emailVerified, false);
+    const verified = await call('POST', '/api/v1/me/verify-email', { code: lastCode(email) }, auth);
+    assert.equal(verified.status, 200);
+    assert.equal(verified.json.emailVerified, true);
+  });
+
+  it('changes the password, signing out other devices but not this one', async () => {
+    const { email, auth, refreshToken } = await register();
+    const bad = await call('POST', '/api/v1/me/password', { currentPassword: 'nope', newPassword: 'brand-new-pass' }, auth);
+    assert.equal(bad.status, 400);
+    const ok = await call('POST', '/api/v1/me/password', { currentPassword: 'password123', newPassword: 'brand-new-pass' }, auth);
+    assert.equal(ok.status, 200);
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken })).status, 401);
+    assert.equal((await call('POST', '/api/v1/auth/refresh', { refreshToken: ok.json.refreshToken })).status, 200);
+    assert.equal((await call('POST', '/api/v1/auth/login', { email, password: 'brand-new-pass' })).status, 200);
+  });
+
+  it('sends security headers and a request id', async () => {
+    const res = await fetch(`${base}/health`);
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.ok(res.headers.get('x-request-id'));
   });
 
   it('rejects requests without a valid bearer token', async () => {
@@ -193,7 +309,84 @@ describe('profile and fixed expenses', () => {
   });
 });
 
+describe('deleting and batching', () => {
+  it('deletes only the caller’s payments by dedupe hash, idempotently', async () => {
+    const a = await register();
+    const b = await register();
+    const tx = mobileTx({ dedupeHash: 'd'.repeat(64) });
+    await call('POST', '/api/v1/transactions/sync', { transactions: [tx] }, a.auth);
+    await call('POST', '/api/v1/transactions/sync', { transactions: [tx] }, b.auth);
+
+    const del = await call('POST', '/api/v1/transactions/delete', { dedupeHashes: ['d'.repeat(64)] }, a.auth);
+    assert.equal(del.status, 200);
+    assert.equal(del.json.deleted, 1);
+    assert.equal((await call('POST', '/api/v1/transactions/delete', { dedupeHashes: ['d'.repeat(64)] }, a.auth)).json.deleted, 0);
+    assert.equal((await call('GET', '/api/v1/transactions', undefined, a.auth)).json.totalCount, 0);
+    assert.equal((await call('GET', '/api/v1/transactions', undefined, b.auth)).json.totalCount, 1);
+    assert.equal((await call('POST', '/api/v1/transactions/delete', { dedupeHashes: ['not-a-hash'] }, a.auth)).status, 400);
+  });
+
+  it('accepts the same payment twice in one batch', async () => {
+    const { auth } = await register();
+    const res = await call(
+      'POST',
+      '/api/v1/transactions/sync',
+      { transactions: [mobileTx({ category: 'food' }), mobileTx({ category: 'shopping' })] },
+      auth,
+    );
+    assert.equal(res.status, 200);
+    const list = await call('GET', '/api/v1/transactions', undefined, auth);
+    assert.equal(list.json.totalCount, 1);
+    assert.equal(list.json.items[0].category, 'shopping');
+  });
+
+  it('replaces fixed expenses without losing ones that keep their id', async () => {
+    const { auth } = await register();
+    await call('PUT', '/api/v1/me/fixed-expenses', [{ id: 'rent', name: 'Rent', amountPaise: 100, dueDay: 1 }, { id: 'gym', name: 'Gym', amountPaise: 50, dueDay: 2 }], auth);
+    const res = await call('PUT', '/api/v1/me/fixed-expenses', [{ id: 'rent', name: 'Rent', amountPaise: 200, dueDay: 1 }], auth);
+    assert.deepEqual(res.json.map((f: { id: string }) => f.id), ['rent']);
+    const list = await call('GET', '/api/v1/me/fixed-expenses', undefined, auth);
+    assert.deepEqual(list.json.map((f: { id: string; amountPaise: number }) => [f.id, f.amountPaise]), [['rent', 200]]);
+  });
+});
+
 describe('insights and nightly job', () => {
+  it('prorates the cycle the budget was set up in, like the phone', async () => {
+    const { auth, email } = await register();
+    // ₹31,000 spendable over 31 days; set up on the 28th → 4 days covered → ₹4,000 → ₹1,000/day.
+    await call(
+      'PUT',
+      '/api/v1/me/profile',
+      { salaryPaise: 31_000_00, payday: 1, savingsGoalPaise: 0, budgetStartDate: '2026-10-28' },
+      auth,
+    );
+    const user = await getDb().collection<UserDoc>('users').findOne({ email });
+    assert.ok(user);
+    assert.equal(user.budgetStartDate, '2026-10-28');
+    const summary = await buildSummaryForUser(user, '2026-10-28');
+    assert.equal(summary.budgetPaise, 1_000_00);
+  });
+
+  it('catches up missing days once, and never runs on two instances at the same time', async () => {
+    const { auth, email } = await register();
+    await call('PUT', '/api/v1/me/profile', { salaryPaise: 30_000_00, payday: 1, savingsGoalPaise: 0 }, auth);
+    const user = await getDb().collection<UserDoc>('users').findOne({ email });
+    assert.ok(user);
+    // Pretend the account is old enough to have a full week behind it.
+    await getDb().collection<UserDoc>('users').updateOne({ email }, { $set: { createdAt: new Date(Date.now() - 30 * 86_400_000) } });
+
+    const built = await runCatchUp();
+    assert.ok(built >= 7);
+    const yesterday = addDays(toDateKey(Date.now()), -1);
+    assert.ok(await getDb().collection<DailySummaryDoc>('dailySummaries').findOne({ userId: user.id, dateKey: yesterday }));
+    assert.equal(await runCatchUp(), 0); // nothing missing any more
+
+    assert.equal(await acquireJobLock('test-lock', 60_000, 'instance-a'), true);
+    assert.equal(await acquireJobLock('test-lock', 60_000, 'instance-b'), false);
+    await releaseJobLock('test-lock', 'instance-a');
+    assert.equal(await acquireJobLock('test-lock', 60_000, 'instance-b'), true);
+  });
+
   it('nets refunds and ignores fixed and excluded payments', async () => {
     const { auth, email } = await register();
     await call('PUT', '/api/v1/me/profile', { salaryPaise: 60_000_00, payday: 1, savingsGoalPaise: 0 }, auth);

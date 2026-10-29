@@ -29,3 +29,13 @@ services:
         generateValue: true # Render generates a long random secret
       - key: ADMIN_API_KEY
         sync: false
+      - key: NODE_ENV
+        value: production
+      # Password-reset and verification emails (https://resend.com). Without them, reset is off.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false # e.g. "Paisa Pulse <no-reply@yourdomain.com>" on a domain verified in Resend
+      # Optional error reporting (https://sentry.io). Leave empty to turn it off.
+      - key: SENTRY_DSN
+        sync: false

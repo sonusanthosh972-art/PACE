@@ -8,26 +8,31 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test": "tsx --test test/*.test.ts"
+    "test": "LOG_LEVEL=silent tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "@sentry/node": "^10.78.0",
+    "bcrypt": "^6.0.0",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.3.0",
     "express-rate-limit": "^7.5.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.13.0",
-    "node-cron": "^3.0.3",
-    "zod": "^3.24.2"
+    "node-cron": "^4.6.0",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.8",
     "@types/node": "^22.13.4",
-    "@types/node-cron": "^3.0.11",
     "mongodb-memory-server": "^11.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

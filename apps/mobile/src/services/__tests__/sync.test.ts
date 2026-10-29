@@ -1,7 +1,13 @@
 import { migrate, type SqlDb } from '@/data/db';
 import { replaceFixedExpenses, saveProfile } from '@/data/profileRepo';
 import { createTestClock, createTestDb } from '@/data/testing/nodeSqliteDb';
-import { addManual, getById, pendingSync } from '@/data/transactionsRepo';
+import {
+  addManual,
+  deleteTransaction,
+  getById,
+  pendingDeletes,
+  pendingSync,
+} from '@/data/transactionsRepo';
 import { deleteAllData } from '@/services/actions';
 import { setApiBaseUrl } from '@/services/api/client';
 import { clearTokens, hasTokens, saveTokens } from '@/services/api/tokens';
@@ -286,5 +292,33 @@ describe('sync service', () => {
     expect(serverDeleteCalled).toBe(true);
     expect(await hasTokens()).toBe(false);
     expect(useAuthStore.getState().user).toBeNull();
+  });
+
+  it('uploads deleted payments and stops re-sending them once the server confirms', async () => {
+    useAuthStore.setState({ isAuthenticated: true });
+    await saveTokens('valid-token', 'valid-refresh');
+    const tx = await addManual(
+      db,
+      { amountPaise: 100, category: 'food', note: null, merchant: null, occurredAt: clock.now() },
+      clock,
+    );
+    await deleteTransaction(db, tx.id, clock);
+
+    const calls: { url: string; body: unknown }[] = [];
+    global.fetch = jest.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const body = url.endsWith('/delete')
+        ? { deleted: 1 }
+        : { inserted: 0, updated: 0, totalProcessed: 0 };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    await syncNow(db);
+    const deleteCall = calls.find((c) => c.url.endsWith('/api/v1/transactions/delete'));
+    expect(deleteCall?.body).toEqual({ dedupeHashes: [tx.dedupeHash] });
+    expect(await pendingDeletes(db)).toHaveLength(0);
   });
 });

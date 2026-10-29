@@ -156,3 +156,19 @@ export function computeTodayBudget(spendablePaise: number, spentBeforeTodayPaise
   if (remaining <= 0) return 0;
   return Math.round(remaining / Math.max(1, Math.trunc(daysLeft)));
 }
+
+/**
+ * First day whose spending counts in this cycle: the setup day when the budget was set up
+ * part-way through the cycle, otherwise the cycle start. Same rule as the mobile app.
+ */
+export function budgetStartInCycle(cycle: Cycle, startDate?: DateKey | null): DateKey {
+  return startDate && startDate > cycle.start && startDate <= cycle.end ? startDate : cycle.start;
+}
+
+/** Money for the cycle; a cycle joined part-way gets spendable × coveredDays ÷ totalDays. */
+export function poolForCycle(spendablePaise: number, cycle: Cycle, startDate?: DateKey | null): number {
+  const from = budgetStartInCycle(cycle, startDate);
+  if (from === cycle.start) return spendablePaise;
+  const coveredDays = diffDays(from, cycle.end) + 1;
+  return Math.round((spendablePaise * coveredDays) / cycle.totalDays);
+}

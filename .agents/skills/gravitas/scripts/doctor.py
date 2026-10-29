@@ -40,10 +40,14 @@ def main() -> int:
     ]
     native = next((path for path in native_candidates if path.is_dir()), None)
     imported = imported_plugin_names(home)
+    workspace_root = Path(__file__).resolve().parents[4]
+    workspace_hooks = Path(__file__).resolve().parents[3] / "hooks.json"
     result = {
         "gravitas_core_detected": (skill_root / "SKILL.md").is_file(),
         "core_path": str(skill_root),
         "canonical_skill_sha256": sha256(skill_root / "SKILL.md"),
+        "project_validator_detected": (workspace_root / "scripts" / "check.sh").is_file(),
+        "workspace_hooks_detected": workspace_hooks.is_file(),
         "antigravity_cli_detected": shutil.which("agy") is not None,
         "gravitas_native_detected": native is not None,
         "native_plugin_path": str(native) if native else None,

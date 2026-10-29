@@ -1,23 +1,30 @@
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 
+import * as Sentry from '@sentry/node';
+if (process.env.SENTRY_DSN) {
+  // Errors only (no tracing), and never request bodies or user details.
+  Sentry.init({ dsn: process.env.SENTRY_DSN, tracesSampleRate: 0, sendDefaultPii: false });
+}
+
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { closeDb, connectDb } from './db/mongo.js';
 import { startDailySummaryCron } from './jobs/dailySummary.js';
+import { logger } from './logger.js';
 
 async function bootstrap() {
   const config = loadConfig();
 
-  console.log('[Bootstrap] Connecting to MongoDB...');
+  logger.info('[Bootstrap] Connecting to MongoDB...');
   await connectDb(config.mongoUri, config.databaseName);
-  console.log(`[Bootstrap] Connected to database "${config.databaseName}" and ensured indexes.`);
+  logger.info(`[Bootstrap] Connected to database "${config.databaseName}" and ensured indexes.`);
 
   const cron = startDailySummaryCron();
   const server = createApp(config).listen(config.port, config.host, () => {
-    console.log(`[PaisaPulse API] Listening on http://${config.host}:${config.port}`);
+    logger.info(`[PaisaPulse API] Listening on http://${config.host}:${config.port}`);
     if (!config.adminApiKey) {
-      console.log('[PaisaPulse API] ADMIN_API_KEY not set: admin endpoints are disabled.');
+      logger.warn('[PaisaPulse API] ADMIN_API_KEY not set: admin endpoints are disabled.');
     }
   });
 

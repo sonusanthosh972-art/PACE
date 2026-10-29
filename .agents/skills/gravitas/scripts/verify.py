@@ -81,18 +81,26 @@ def main():
         command = args.cmd
         provenance = "explicit --cmd"
     else:
-        catalog = discover_validators(Path.cwd()) if _DISCOVERY else {"validators": []}
-        tests = [v for v in catalog["validators"] if v["kind"] == "test"]
-        if tests:
-            command = " && ".join(" ".join(c) for c in [v["command"] for v in tests])
-            provenance = "discovered: " + ", ".join(v["id"] for v in tests)
-        elif language in FALLBACK_CHAINS:
-            command = FALLBACK_CHAINS[language]
-            provenance = f"fallback chain for {language} (no project-declared validators found)"
+        project_check = Path.cwd() / "scripts" / "check.sh"
+        if project_check.is_file():
+            command = "./scripts/check.sh"
+            provenance = "discovered project validator: ./scripts/check.sh"
+        elif (Path.cwd() / "package.json").is_file() and '"check":' in (Path.cwd() / "package.json").read_text():
+            command = "npm run check"
+            provenance = "discovered package validator: npm run check"
         else:
-            print(f"VERDICT: FAIL -- no validators discovered for '{language}'")
-            print("Specify --cmd to run verification manually.")
-            sys.exit(1)
+            catalog = discover_validators(Path.cwd()) if _DISCOVERY else {"validators": []}
+            tests = [v for v in catalog["validators"] if v["kind"] == "test"]
+            if tests:
+                command = " && ".join(" ".join(c) for c in [v["command"] for v in tests])
+                provenance = "discovered: " + ", ".join(v["id"] for v in tests)
+            elif language in FALLBACK_CHAINS:
+                command = FALLBACK_CHAINS[language]
+                provenance = f"fallback chain for {language} (no project-declared validators found)"
+            else:
+                print(f"VERDICT: FAIL -- no validators discovered for '{language}'")
+                print("Specify --cmd to run verification manually.")
+                sys.exit(1)
 
     print(f"Language: {language}")
     print(f"Command:  {command}")

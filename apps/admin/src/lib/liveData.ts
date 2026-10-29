@@ -29,7 +29,7 @@ async function getJson<T>(path: string): Promise<T> {
 export async function fetchLiveData(): Promise<LiveData> {
   const [overview, users, transactions, fixed, summaries] = await Promise.all([
     getJson<{ stats: AdminOverviewStats; health: AdminSystemHealth }>('/api/stats'),
-    getJson<{ users: AdminUser[] }>('/api/users'),
+    getJson<{ users: AdminUser[] }>('/api/users?pageSize=500'),
     getJson<{ transactions: AdminTransaction[] }>('/api/transactions'),
     getJson<{ fixedExpenses: AdminFixedExpense[] }>('/api/fixed-expenses'),
     getJson<{ summaries: AdminDailySummary[] }>('/api/summaries'),

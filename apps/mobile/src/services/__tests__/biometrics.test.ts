@@ -33,11 +33,14 @@ describe('biometrics service', () => {
 
   it('handles hardware absence gracefully', async () => {
     (LocalAuthentication.hasHardwareAsync as jest.Mock).mockResolvedValueOnce(false);
+    (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValueOnce(0);
     const status = await checkBiometrics();
     expect(status.hasHardware).toBe(false);
     expect(status.isEnrolled).toBe(false);
+    expect(status.deviceSecure).toBe(false);
 
     (LocalAuthentication.hasHardwareAsync as jest.Mock).mockResolvedValueOnce(false);
+    (LocalAuthentication.getEnrolledLevelAsync as jest.Mock).mockResolvedValueOnce(0);
     const authed = await authenticateWithBiometrics();
     expect(authed).toBe(false);
   });

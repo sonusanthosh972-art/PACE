@@ -17,6 +17,8 @@ export const userProfileSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .optional(),
+  /** Older servers omit it. */
+  emailVerified: z.boolean().optional(),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
 

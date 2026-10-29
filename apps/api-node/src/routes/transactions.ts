@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import type { Filter } from 'mongodb';
+import type { AnyBulkWriteOperation, Filter } from 'mongodb';
 import { AuthenticatedRequest, requireAuth, userIdOf } from '../middleware/auth.js';
 import { getDb } from '../db/mongo.js';
 import { TransactionDoc } from '../db/models.js';
@@ -44,6 +44,10 @@ const syncSchema = z.object({
   transactions: z.array(transactionInputSchema).max(MAX_SYNC_BATCH),
 });
 
+const deleteSchema = z.object({
+  dedupeHashes: z.array(z.string().regex(/^[0-9a-f]{64}$/)).max(MAX_SYNC_BATCH),
+});
+
 const patchSchema = z
   .object({
     category: z.enum(CATEGORY_IDS).optional(),
@@ -72,16 +76,20 @@ transactionsRouter.post('/sync', async (req: AuthenticatedRequest, res: Response
   }
 
   const userId = userIdOf(req);
-  const collection = getDb().collection<TransactionDoc>('transactions');
   const nowMs = Date.now();
+  if (parse.data.transactions.length === 0) {
+    res.status(200).json({ inserted: 0, updated: 0, totalProcessed: 0 });
+    return;
+  }
 
-  let inserted = 0;
-  let updated = 0;
+  // Keep the last copy of each payment: two upserts for one key in a parallel batch would collide.
+  const unique = [...new Map(parse.data.transactions.map((t) => [t.dedupeHash, t])).values()];
 
-  for (const t of parse.data.transactions) {
-    const result = await collection.updateOne(
-      { userId, dedupeHash: t.dedupeHash },
-      {
+  // One round trip for the whole batch instead of one per transaction.
+  const ops: AnyBulkWriteOperation<TransactionDoc>[] = unique.map((t) => ({
+    updateOne: {
+      filter: { userId, dedupeHash: t.dedupeHash },
+      update: {
         $setOnInsert: {
           id: t.id,
           userId,
@@ -107,14 +115,31 @@ transactionsRouter.post('/sync', async (req: AuthenticatedRequest, res: Response
           updatedAt: t.updatedAt ?? nowMs,
         },
       },
-      { upsert: true },
-    );
+      upsert: true,
+    },
+  }));
+  const result = await getDb()
+    .collection<TransactionDoc>('transactions')
+    .bulkWrite(ops, { ordered: false });
 
-    if (result.upsertedCount > 0) inserted++;
-    else if (result.matchedCount > 0) updated++;
+  res.status(200).json({
+    inserted: result.upsertedCount,
+    updated: result.matchedCount,
+    totalProcessed: parse.data.transactions.length,
+  });
+});
+
+// POST /api/v1/transactions/delete — payments the user deleted on the phone (idempotent)
+transactionsRouter.post('/delete', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parse = deleteSchema.safeParse(req.body);
+  if (!parse.success) {
+    validationProblem(res, parse.error);
+    return;
   }
-
-  res.status(200).json({ inserted, updated, totalProcessed: parse.data.transactions.length });
+  const result = await getDb()
+    .collection<TransactionDoc>('transactions')
+    .deleteMany({ userId: userIdOf(req), dedupeHash: { $in: parse.data.dedupeHashes } });
+  res.status(200).json({ deleted: result.deletedCount });
 });
 
 // GET /api/v1/transactions?from&to&category&page&pageSize

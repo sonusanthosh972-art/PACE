@@ -48,6 +48,15 @@ async function initIndexes(database: Db) {
     { name: 'ix_users_refreshTokenHash', partialFilterExpression: { refreshTokenHash: { $type: 'string' } } }
   );
 
+  // 1b. sessions: one per signed-in device; Mongo deletes expired ones automatically
+  await database.collection('sessions').createIndex({ tokenHash: 1 }, { unique: true, name: 'ux_sessions_tokenHash' });
+  await database.collection('sessions').createIndex({ userId: 1 }, { name: 'ix_sessions_userId' });
+  await database.collection('sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_sessions_expiresAt' });
+
+  // 1c. authCodes: one active code per user and purpose, expired codes removed automatically
+  await database.collection('authCodes').createIndex({ userId: 1, purpose: 1 }, { unique: true, name: 'ux_authCodes_user_purpose' });
+  await database.collection('authCodes').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_authCodes_expiresAt' });
+
   // 2. fixedExpenses: index on userId
   await database.collection('fixedExpenses').createIndex({ userId: 1 }, { name: 'ix_fixedExpenses_userId' });
 

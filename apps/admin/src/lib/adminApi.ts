@@ -10,6 +10,9 @@ export const API_URL = (process.env.API_URL || 'http://localhost:5080').replace(
  * Proxies an admin endpoint of the API, attaching the shared ADMIN_API_KEY.
  * The key lives only in the Next.js server environment (apps/admin/.env.local).
  */
+/** A free-tier API can take up to a minute to wake from sleep; wait for it rather than erroring. */
+const API_TIMEOUT_MS = 55_000;
+
 export async function proxyAdmin(path: string): Promise<NextResponse> {
   // Checked here as well as in proxy.ts, so a matcher change can never expose data.
   if (!isValidSession((await cookies()).get(SESSION_COOKIE)?.value)) {
@@ -27,13 +30,17 @@ export async function proxyAdmin(path: string): Promise<NextResponse> {
     const res = await fetch(`${API_URL}/api/v1/admin/${path}`, {
       cache: 'no-store',
       headers: { Accept: 'application/json', 'x-admin-key': key },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
     const body: unknown = await res.json().catch(() => null);
     return NextResponse.json(body ?? { status: res.status, title: 'Empty response from API' }, { status: res.status });
   } catch {
     return NextResponse.json(
-      { status: 502, title: 'API unreachable', detail: `Could not reach ${API_URL}. Is apps/api-node running?` },
+      {
+        status: 502,
+        title: 'API unreachable',
+        detail: `Could not reach ${API_URL} within ${API_TIMEOUT_MS / 1000}s. If it is a sleeping free-tier server, retry in a moment.`,
+      },
       { status: 502 },
     );
   }

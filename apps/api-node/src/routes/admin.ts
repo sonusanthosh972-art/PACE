@@ -13,6 +13,10 @@ const ACTIVE_WINDOW_MS = 7 * DAY_MS;
 const NEAR_LIMIT_RATIO = 0.8;
 
 const limitQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+const pageQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(500).default(100),
+});
 
 async function userNames(): Promise<Map<string, string>> {
   const users = await getDb()
@@ -104,19 +108,34 @@ adminRouter.get('/stats', async (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/v1/admin/users
-adminRouter.get('/users', async (_req: Request, res: Response) => {
+// GET /api/v1/admin/users?page&pageSize — newest accounts first
+adminRouter.get('/users', async (req: Request, res: Response) => {
+  const parse = pageQuery.safeParse(req.query);
+  if (!parse.success) {
+    validationProblem(res, parse.error);
+    return;
+  }
+  const { page, pageSize } = parse.data;
   const db = getDb();
   const now = Date.now();
-  const [users, activity] = await Promise.all([
-    db.collection<UserDoc>('users').find({}, { projection: { passwordHash: 0, refreshTokenHash: 0 } }).toArray(),
+  const [users, total] = await Promise.all([
     db
-      .collection<TransactionDoc>('transactions')
-      .aggregate<{ _id: string; count: number; lastAt: number }>([
-        { $group: { _id: '$userId', count: { $sum: 1 }, lastAt: { $max: '$updatedAt' } } },
-      ])
+      .collection<UserDoc>('users')
+      .find({}, { projection: { passwordHash: 0, refreshTokenHash: 0 } })
+      .sort({ createdAt: -1, id: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .toArray(),
+    db.collection<UserDoc>('users').countDocuments(),
   ]);
+  // Activity only for the users on this page (uses the userId index instead of scanning everything).
+  const activity = await db
+    .collection<TransactionDoc>('transactions')
+    .aggregate<{ _id: string; count: number; lastAt: number }>([
+      { $match: { userId: { $in: users.map((u) => u.id) } } },
+      { $group: { _id: '$userId', count: { $sum: 1 }, lastAt: { $max: '$updatedAt' } } },
+    ])
+    .toArray();
   const byUser = new Map(activity.map((a) => [a._id, a]));
 
   const mapped = users.map((u) => {
@@ -138,7 +157,7 @@ adminRouter.get('/users', async (_req: Request, res: Response) => {
     };
   });
 
-  res.status(200).json({ users: mapped, total: mapped.length });
+  res.status(200).json({ users: mapped, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
 });
 
 // GET /api/v1/admin/transactions?limit

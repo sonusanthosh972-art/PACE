@@ -296,7 +296,8 @@ describe('budget totals in SQL', () => {
         { amountPaise: amount, category, note: null, merchant: null, occurredAt: at },
         clock,
       );
-      if (credit) await db.runAsync(`UPDATE transactions SET direction = 'credit' WHERE id = ?`, [tx.id]);
+      if (credit)
+        await db.runAsync(`UPDATE transactions SET direction = 'credit' WHERE id = ?`, [tx.id]);
       if (excluded) await setExcluded(db, tx.id, true, clock);
     };
     await add(1000_00, 'food');

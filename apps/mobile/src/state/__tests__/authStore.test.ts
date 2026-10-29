@@ -82,4 +82,28 @@ describe('authStore', () => {
 
     expect(getApiBaseUrl()).toBe('http://192.168.1.100:5080');
   });
+
+  it('ends the session on the server when signing out, and signs out even offline', async () => {
+    await saveTokens('jwt', 'refresh-abc');
+    useAuthStore.setState({ isAuthenticated: true });
+    const fetchSpy = jest.fn().mockResolvedValue({ status: 204, ok: true, headers: new Headers() });
+    global.fetch = fetchSpy;
+
+    await useAuthStore.getState().logout();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://test-server:5080/api/v1/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: 'refresh-abc' }),
+      }),
+    );
+    expect(await hasTokens()).toBe(false);
+
+    await saveTokens('jwt', 'refresh-def');
+    useAuthStore.setState({ isAuthenticated: true });
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
+    await useAuthStore.getState().logout();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(await hasTokens()).toBe(false);
+  });
 });

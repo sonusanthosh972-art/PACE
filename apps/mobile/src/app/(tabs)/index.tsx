@@ -161,7 +161,7 @@ function TodayContent({ data, importing }: { data: TodayData; importing: boolean
       <View style={styles.stats}>
         <Stat label="Spent today" paise={snapshot.spentTodayPaise} />
         <Stat
-          label="Left this cycle"
+          label="Left until payday"
           paise={Math.max(
             0,
             snapshot.spendablePaise - snapshot.spentBeforeTodayPaise - snapshot.spentTodayPaise,

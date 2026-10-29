@@ -18,10 +18,17 @@ echo ""
 
 FAILED=0
 
-# --- Detect project type and run checks ---
-
-# Node.js / TypeScript
-if [ -f "package.json" ]; then
+# --- Project-level check suite (e.g. monorepo check pipeline) ---
+if [ -f "scripts/check.sh" ]; then
+    echo "--- Project check suite (scripts/check.sh) detected ---"
+    if bash scripts/check.sh; then
+        echo "✓ Project check suite passed"
+    else
+        echo "✗ Project check suite failed"
+        FAILED=1
+    fi
+# Node.js / TypeScript single-package fallback
+elif [ -f "package.json" ]; then
     echo "--- Node.js project detected ---"
 
     if [ -f "tsconfig.json" ] && command -v npx &>/dev/null; then

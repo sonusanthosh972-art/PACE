@@ -1,0 +1,36 @@
+# Runs the same full self-check as `npm run check` on every push and pull request.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            apps/api-node/package-lock.json
+            apps/admin/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix apps/mobile
+          npm ci --prefix apps/api-node
+          npm ci --prefix apps/admin
+
+      - name: Typecheck, lint, test and build every app
+        run: scripts/check.sh

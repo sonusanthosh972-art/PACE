@@ -9,7 +9,10 @@ import {
   type AuthResponse,
   type UserProfile,
 } from '@/services/api/schemas';
-import { clearTokens, getAccessToken, saveTokens } from '@/services/api/tokens';
+import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from '@/services/api/tokens';
+
+/** Sign-out never waits long for the server: the phone signs out either way. */
+const LOGOUT_TIMEOUT_MS = 5_000;
 
 export type SyncState = 'idle' | 'syncing' | 'offline' | 'retrying' | 'error';
 
@@ -26,6 +29,13 @@ interface AuthState {
   login: (email: string, password: string) => Promise<AuthResponse>;
   register: (email: string, password: string, name: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
+  /** Emails a reset code if the account exists (the answer is the same either way). */
+  requestPasswordReset: (email: string) => Promise<void>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  /** Changes the password; other devices are signed out, this one stays signed in. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  sendVerificationCode: () => Promise<void>;
+  verifyEmail: (code: string) => Promise<void>;
   setUser: (user: UserProfile | null) => void;
   setSyncStatus: (
     status: SyncState,
@@ -163,6 +173,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // End this device's session on the server too, so the refresh token is useless if leaked.
+    const refreshToken = await getRefreshToken().catch(() => null);
+    if (refreshToken) {
+      await apiClient('/api/v1/auth/logout', {
+        method: 'POST',
+        body: { refreshToken },
+        skipAuth: true,
+        signal: AbortSignal.timeout(LOGOUT_TIMEOUT_MS),
+      }).catch(() => undefined);
+    }
     await clearTokens();
     try {
       const db = await getAppDb();
@@ -177,6 +197,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       syncError: null,
       nextRetrySeconds: null,
     });
+  },
+
+  requestPasswordReset: async (email: string) => {
+    await apiClient('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+      skipAuth: true,
+    });
+  },
+
+  resetPassword: async (email: string, code: string, newPassword: string) => {
+    await apiClient('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: { email, code, newPassword },
+      skipAuth: true,
+    });
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const res = await apiClient(
+      '/api/v1/me/password',
+      { method: 'POST', body: { currentPassword, newPassword } },
+      authResponseSchema,
+    );
+    await saveTokens(res.accessToken, res.refreshToken);
+    set({ user: res.user });
+  },
+
+  sendVerificationCode: async () => {
+    await apiClient('/api/v1/me/verify-email/send', { method: 'POST' });
+  },
+
+  verifyEmail: async (code: string) => {
+    const user = await apiClient(
+      '/api/v1/me/verify-email',
+      { method: 'POST', body: { code } },
+      userProfileSchema,
+    );
+    set({ user });
   },
 
   setUser: (user) => set({ user }),

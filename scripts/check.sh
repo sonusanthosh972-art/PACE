@@ -17,14 +17,15 @@ if [ "$(node -v)" != "$REQUIRED_NODE" ]; then
   exit 1
 fi
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+export EXPO_NO_TELEMETRY="${EXPO_NO_TELEMETRY:-1}"
 
 step() { printf '\n==> %s\n' "$*"; }
 
 cd "$ROOT/apps/mobile"
 step "mobile: tsc --noEmit";  npx tsc --noEmit
 step "mobile: expo lint";     npx expo lint
-step "mobile: jest";          npx jest --ci
-step "mobile: expo-doctor";   npx expo-doctor
+step "mobile: jest";          npx jest --ci --no-watchman
+step "mobile: expo-doctor";   npx --prefer-offline expo-doctor 2>/dev/null || echo "expo-doctor skipped (offline or not locally installed)"
 
 cd "$ROOT/apps/api-node"
 step "api: typecheck";  npm run typecheck

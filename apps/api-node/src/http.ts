@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { MongoServerError } from 'mongodb';
+import { logger } from './logger.js';
 import type { ZodError } from 'zod';
 
 /** RFC 7807 problem response (same shape the mobile client reads error messages from). */
@@ -36,6 +38,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, next: N
     problem(res, 413, 'Payload too large');
     return;
   }
-  console.error('[API] Unhandled error:', err instanceof Error ? `${err.name}: ${err.message}` : err);
+  logger.error({ err }, '[API] Unhandled error');
+  Sentry.captureException(err); // no-op unless SENTRY_DSN is set
   problem(res, 500, 'Internal server error');
 }

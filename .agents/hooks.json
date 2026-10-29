@@ -1,0 +1,37 @@
+{
+  "gravitas-guard": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 scripts/gravitas-hook.py",
+        "timeout": 15
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/gravitas-hook.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/gravitas-hook.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+
