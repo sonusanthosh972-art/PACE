@@ -3,12 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { CATEGORIES } from '@/domain/categories';
 import { formatINRWhole } from '@/domain/money';
 import type { Transaction } from '@/domain/transaction';
-import { formatTime, MODE_LABELS, txTitle } from '@/lib/format';
+import { formatTime, modeLabel, txTitle } from '@/lib/format';
 import { useTheme } from '@/theme/ThemeProvider';
-import { MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
+import { ICON, MIN_TOUCH, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
-import { AppText } from './AppText';
 import { Amount } from './Amount';
+import { AppText } from './AppText';
+import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 
 interface Props {
@@ -35,11 +36,13 @@ export function TransactionRow({ tx, onPress, showTime = true }: Props) {
   const credit = tx.direction === 'credit';
   const meta = [
     tx.needsReview ? 'Tap to tag' : category.label,
-    MODE_LABELS[tx.mode],
+    modeLabel(tx),
     showTime ? formatTime(tx.occurredAt) : null,
   ]
     .filter(Boolean)
     .join(' · ');
+
+  const catColor = colors.categories[tx.category];
 
   return (
     <PressableScale
@@ -53,12 +56,13 @@ export function TransactionRow({ tx, onPress, showTime = true }: Props) {
       <View
         style={[
           styles.badge,
-          { backgroundColor: colors.elevated, borderColor: colors.categories[tx.category] },
+          {
+            backgroundColor: withAlpha(catColor, 0.12),
+            borderColor: withAlpha(catColor, 0.22),
+          },
         ]}
       >
-        <AppText variant="heading" accessible={false}>
-          {category.emoji}
-        </AppText>
+        <Icon name={category.icon as IconName} size={ICON.md} tint={catColor} />
       </View>
       <View style={styles.middle}>
         <AppText variant="bodyStrong" numberOfLines={1}>
@@ -92,20 +96,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.md,
-    minHeight: MIN_TOUCH + 20,
+    minHeight: MIN_TOUCH + 16,
     paddingVertical: SPACE.md,
     paddingHorizontal: SPACE.lg,
     borderRadius: RADIUS.md,
   },
   badge: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.pill,
+    width: 42,
+    height: 42,
+    borderRadius: RADIUS.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
   },
   middle: { flex: 1, gap: 2 },
-  // Capped so a very large amount shrinks instead of squeezing the merchant name away.
-  right: { alignItems: 'flex-end', gap: 2, maxWidth: '45%' },
+  right: { alignItems: 'flex-end', minWidth: 78, maxWidth: '35%' },
 });

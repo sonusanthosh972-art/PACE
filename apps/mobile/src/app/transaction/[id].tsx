@@ -8,10 +8,11 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { CategoryGrid } from '@/components/CategoryGrid';
 import { SwitchRow } from '@/components/Controls';
+import { Icon, type IconName } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { CATEGORIES, type CategoryId } from '@/domain/categories';
 import type { Transaction } from '@/domain/transaction';
-import { formatDateTime, MODE_LABELS, txTitle } from '@/lib/format';
+import { formatDateTime, modeLabel, txTitle } from '@/lib/format';
 import { useTodayKey } from '@/lib/useTodayKey';
 import {
   recategoriseTransaction,
@@ -19,7 +20,8 @@ import {
   setTransactionExcluded,
 } from '@/services/actions';
 import { invalidateAll, useTransaction } from '@/state/queries';
-import { SPACE } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { ICON, SPACE } from '@/theme/tokens';
 
 export default function TransactionSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,7 +58,7 @@ function Details({ tx }: { tx: Transaction }) {
 
   const facts: [string, string | null][] = [
     ['When', formatDateTime(tx.occurredAt, today)],
-    ['Mode', MODE_LABELS[tx.mode]],
+    ['Mode', modeLabel(tx)],
     ['Account', tx.accountLast4 ? `•••• ${tx.accountLast4}` : null],
     ['Reference', tx.upiRef],
     ['UPI ID', tx.vpa],
@@ -86,9 +88,7 @@ function Details({ tx }: { tx: Transaction }) {
           prefix={credit ? '+' : ''}
           color={credit ? 'accentText' : 'text'}
         />
-        <AppText color="muted">
-          {CATEGORIES[tx.category].emoji} {CATEGORIES[tx.category].label}
-        </AppText>
+        <CategoryLabel category={tx.category} />
       </View>
 
       <View style={styles.facts}>
@@ -148,7 +148,22 @@ function Details({ tx }: { tx: Transaction }) {
   );
 }
 
+function CategoryLabel({ category }: { category: CategoryId }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.categoryLabel}>
+      <Icon
+        name={CATEGORIES[category].icon as IconName}
+        size={ICON.sm}
+        tint={colors.categories[category]}
+      />
+      <AppText color="muted">{CATEGORIES[category].label}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  categoryLabel: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   content: { padding: SPACE.xl, paddingBottom: SPACE.xxxl },
   stack: { gap: SPACE.lg },
   hero: { alignItems: 'center', gap: SPACE.xs, paddingVertical: SPACE.md },

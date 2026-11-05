@@ -5,6 +5,7 @@ import {
   formatShortDate,
   formatTime,
   formatTimeOfDay,
+  modeLabel,
   ordinal,
   sanitiseAmountInput,
   shiftTime,
@@ -123,5 +124,13 @@ describe('titles and CSV', () => {
     );
     expect(lines[2]).toContain(',0.05,');
     expect(lines[2]).toContain(',yes,');
+  });
+});
+
+describe('modeLabel', () => {
+  it('calls hand-recorded payments cash and keeps bank modes as they are', () => {
+    expect(modeLabel({ mode: 'OTHER', source: 'manual' })).toBe('Cash');
+    expect(modeLabel({ mode: 'UPI', source: 'sms' })).toBe('UPI');
+    expect(modeLabel({ mode: 'OTHER', source: 'sms' })).toBe('Other');
   });
 });

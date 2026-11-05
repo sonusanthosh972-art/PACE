@@ -1,4 +1,4 @@
-import { categorise, type UserRule } from '@/domain/categorise';
+import { categorise, findRule, type UserRule } from '@/domain/categorise';
 import { isCategoryId, type CategoryId } from '@/domain/categories';
 import {
   computeDedupeHash,
@@ -13,6 +13,15 @@ import {
   type ParsedTransaction,
   type Transaction,
 } from '@/domain/transaction';
+import {
+  CARD_BILL_WINDOW_MS,
+  EXCLUDE_NOTES,
+  EXCLUDE_REASONS,
+  findTransferPairs,
+  payeeExcludeReason,
+  type AutoExcludeReason,
+  type ExcludeReason,
+} from '@/domain/transfers';
 
 import type { SqlDb, SqlValue } from './db';
 
@@ -34,9 +43,16 @@ export interface TxRow {
   occurred_at: number;
   dedupe_hash: string;
   is_excluded: number;
+  exclude_reason: string | null;
   created_at: number;
   updated_at: number;
   sync_state: string;
+}
+
+function toExcludeReason(value: string | null): ExcludeReason | null {
+  return (EXCLUDE_REASONS as readonly (string | null)[]).includes(value)
+    ? (value as ExcludeReason)
+    : null;
 }
 
 /** Validates a DB row into a Transaction; rows that fail validation are dropped (and reported). */
@@ -59,6 +75,7 @@ export function rowToTransaction(row: TxRow): Transaction | null {
     occurredAt: row.occurred_at,
     dedupeHash: row.dedupe_hash,
     isExcluded: row.is_excluded === 1,
+    excludeReason: toExcludeReason(row.exclude_reason),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -77,8 +94,8 @@ function rowsToTransactions(rows: readonly TxRow[]): Transaction[] {
 const INSERT_SQL = `INSERT INTO transactions (
   id, amount_paise, direction, account_last4, merchant, merchant_norm, vpa, mode, upi_ref,
   balance_paise, category, needs_review, note, source, occurred_at, dedupe_hash, is_excluded,
-  created_at, updated_at, sync_state
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`;
+  exclude_reason, created_at, updated_at, sync_state
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`;
 
 async function insert(db: SqlDb, tx: Transaction): Promise<void> {
   await db.runAsync(INSERT_SQL, [
@@ -99,6 +116,7 @@ async function insert(db: SqlDb, tx: Transaction): Promise<void> {
     tx.occurredAt,
     tx.dedupeHash,
     tx.isExcluded ? 1 : 0,
+    tx.excludeReason ?? null,
     tx.createdAt,
     tx.updatedAt,
   ]);
@@ -110,10 +128,19 @@ export async function getRules(db: SqlDb): Promise<UserRule[]> {
     pattern: string;
     category: string;
     created_at: number;
-  }>('SELECT id, pattern, category, created_at FROM user_rules', []);
+    excludes: number;
+  }>('SELECT id, pattern, category, created_at, excludes FROM user_rules', []);
   return rows.flatMap((r) =>
     isCategoryId(r.category)
-      ? [{ id: r.id, pattern: r.pattern, category: r.category, createdAt: r.created_at }]
+      ? [
+          {
+            id: r.id,
+            pattern: r.pattern,
+            category: r.category,
+            createdAt: r.created_at,
+            excludes: r.excludes === 1,
+          },
+        ]
       : [],
   );
 }
@@ -213,21 +240,39 @@ export async function ingestParsed(
     { merchantNorm, vpa: parsed.vpa, mode: parsed.mode, direction: parsed.direction },
     rules,
   );
+  const exclusion = excludeOnArrival(parsed, merchantNorm, rules);
   const now = clock.now();
   const tx = transactionSchema.parse({
     ...parsed,
     id: clock.newId(),
     merchantNorm,
     category,
-    needsReview,
-    note: parsed.note ?? null,
+    needsReview: exclusion ? false : needsReview,
+    note: parsed.note ?? (exclusion && exclusion !== 'user' ? EXCLUDE_NOTES[exclusion] : null),
     dedupeHash,
-    isExcluded: parsed.isExcluded ?? false,
+    isExcluded: exclusion !== null,
+    excludeReason: exclusion,
     createdAt: now,
     updatedAt: now,
   });
   await insert(db, tx);
   return { status: 'inserted', transaction: tx };
+}
+
+/**
+ * Whether a new payment is excluded as soon as it arrives. Order: what the bank message itself
+ * says (card bill, own transfer) → the user's rule for this payee (which also stops the app from
+ * guessing) → a payee that collects card bills or investments.
+ */
+function excludeOnArrival(
+  parsed: ParsedTransaction,
+  merchantNorm: string,
+  rules: readonly UserRule[],
+): ExcludeReason | null {
+  if (parsed.isExcluded) return parsed.excludeReason ?? 'user';
+  const rule = findRule(merchantNorm, rules);
+  if (rule) return rule.excludes && parsed.direction === 'debit' ? 'user' : null;
+  return payeeExcludeReason({ merchantNorm, vpa: parsed.vpa, direction: parsed.direction });
 }
 
 export interface ManualEntry {
@@ -328,8 +373,9 @@ export async function recategorise(
   await db.withTransactionAsync(async () => {
     if (tx.merchantNorm) {
       await db.runAsync(
-        `INSERT INTO user_rules (id, pattern, category, created_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT(pattern) DO UPDATE SET category = excluded.category, created_at = excluded.created_at`,
+        `INSERT INTO user_rules (id, pattern, category, created_at, excludes) VALUES (?, ?, ?, ?, 0)
+         ON CONFLICT(pattern) DO UPDATE SET category = excluded.category,
+           created_at = excluded.created_at, excludes = 0`,
         [clock.newId(), tx.merchantNorm, category, now],
       );
       const res = await db.runAsync(
@@ -350,17 +396,133 @@ export async function recategorise(
   return changed;
 }
 
-/** "Not an expense" (e.g. a transfer to your own account) — excluded from all spend maths. */
+/** SQL: an uncategorised payment that counts again needs a category again. */
+const REVIEW_AFTER_EXCLUDE_SQL = `CASE WHEN ? = 0 AND category = 'uncategorised' THEN 1 ELSE 0 END`;
+
+/**
+ * "Not an expense" (e.g. a transfer to your own account): excluded from all spend maths. Either
+ * way the choice is the user's, so automatic detection never changes this payment again.
+ */
 export async function setExcluded(
   db: SqlDb,
   id: string,
   excluded: boolean,
   clock: Clock,
 ): Promise<void> {
+  const flag = excluded ? 1 : 0;
   await db.runAsync(
-    `UPDATE transactions SET is_excluded = ?, updated_at = ?, sync_state = 'pending' WHERE id = ?`,
-    [excluded ? 1 : 0, clock.now(), id],
+    `UPDATE transactions SET is_excluded = ?, exclude_reason = 'user',
+       needs_review = ${REVIEW_AFTER_EXCLUDE_SQL}, updated_at = ?, sync_state = 'pending'
+     WHERE id = ?`,
+    [flag, flag, clock.now(), id],
   );
+}
+
+/**
+ * "Never an expense" for a payee: excludes this payment and every payment to the same payee,
+ * now and in future (as a user rule). Without a payee name only this payment changes.
+ * Returns how many payments changed.
+ */
+export async function excludePayee(db: SqlDb, id: string, clock: Clock): Promise<number> {
+  const tx = await getById(db, id);
+  if (!tx) return 0;
+  if (!tx.merchantNorm) {
+    await setExcluded(db, id, true, clock);
+    return 1;
+  }
+  const now = clock.now();
+  let changed = 0;
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO user_rules (id, pattern, category, created_at, excludes) VALUES (?, ?, ?, ?, 1)
+       ON CONFLICT(pattern) DO UPDATE SET created_at = excluded.created_at, excludes = 1`,
+      [
+        clock.newId(),
+        tx.merchantNorm,
+        tx.category === 'uncategorised' ? 'other' : tx.category,
+        now,
+      ],
+    );
+    const res = await db.runAsync(
+      `UPDATE transactions SET is_excluded = 1, exclude_reason = 'user', needs_review = 0,
+         updated_at = ?, sync_state = 'pending'
+       WHERE merchant_norm = ? AND direction = 'debit'`,
+      [now, tx.merchantNorm],
+    );
+    changed = res.changes;
+  });
+  return changed;
+}
+
+/**
+ * Finds card bill payments, transfers between the user's own accounts and investments among the
+ * payments in [fromMs, toMs) and excludes them. Payments the user has decided about are never
+ * touched. Card bill pairs can be days apart, so the window is widened by that much.
+ * Returns the ids it excluded.
+ */
+export async function detectTransfers(
+  db: SqlDb,
+  fromMs: number,
+  toMs: number,
+  clock: Clock,
+): Promise<string[]> {
+  const rows = rowsToTransactions(
+    await db.getAllAsync<TxRow>(
+      'SELECT * FROM transactions WHERE occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at',
+      [fromMs - CARD_BILL_WINDOW_MS, toMs + CARD_BILL_WINDOW_MS],
+    ),
+  );
+  if (rows.length === 0) return [];
+  const rules = await getRules(db);
+
+  const decisions = new Map<string, AutoExcludeReason>();
+  for (const tx of rows) {
+    if (tx.isExcluded || tx.excludeReason) continue;
+    if (findRule(tx.merchantNorm, rules)) continue; // the user's rule for this payee wins
+    const reason = payeeExcludeReason(tx);
+    if (reason) decisions.set(tx.id, reason);
+  }
+  const pairs = findTransferPairs(
+    rows.map((t) => ({
+      ...t,
+      excludeReason: t.excludeReason ?? null,
+      isExcluded: t.isExcluded || decisions.has(t.id),
+    })),
+  );
+  for (const match of pairs) for (const pairId of match.ids) decisions.set(pairId, match.reason);
+  if (decisions.size === 0) return [];
+
+  const now = clock.now();
+  await db.withTransactionAsync(async () => {
+    for (const [txId, reason] of decisions) {
+      await db.runAsync(
+        `UPDATE transactions SET is_excluded = 1, exclude_reason = ?, needs_review = 0,
+           note = COALESCE(note, ?), updated_at = ?, sync_state = 'pending'
+         WHERE id = ? AND is_excluded = 0 AND exclude_reason IS NULL`,
+        [reason, EXCLUDE_NOTES[reason], now, txId],
+      );
+    }
+  });
+  return [...decisions.keys()];
+}
+
+/** Payments still waiting for a category, newest first. Excluded payments never need one. */
+export async function listReviewQueue(db: SqlDb, limit = 500): Promise<Transaction[]> {
+  return rowsToTransactions(
+    await db.getAllAsync<TxRow>(
+      `SELECT * FROM transactions WHERE needs_review = 1 AND is_excluded = 0
+       ORDER BY occurred_at DESC LIMIT ?`,
+      [limit],
+    ),
+  );
+}
+
+export async function countReviewQueue(db: SqlDb): Promise<number> {
+  const row = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM transactions WHERE needs_review = 1 AND is_excluded = 0',
+    [],
+  );
+  return row?.n ?? 0;
 }
 
 /** Deletes a payment and remembers it, so the delete syncs and the payment never comes back. */

@@ -7,6 +7,8 @@ export interface UserRule {
   pattern: string; // a normalised merchant (see normaliseMerchant)
   category: CategoryId;
   createdAt: number;
+  /** "Never an expense": payments to this payee are excluded from spending. */
+  excludes?: boolean;
 }
 
 /**
@@ -69,6 +71,9 @@ export const MERCHANT_MAP: readonly (readonly [string, CategoryId])[] = [
   ['youtube', 'subscriptions'],
   ['applemedia', 'subscriptions'],
   ['googleplay', 'subscriptions'],
+  ['googlecloud', 'subscriptions'],
+  ['aws', 'subscriptions'],
+  ['amazonwebservices', 'subscriptions'],
   ['sonyliv', 'subscriptions'],
   // Shopping
   ['amazon', 'shopping'],

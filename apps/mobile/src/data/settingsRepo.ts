@@ -18,6 +18,10 @@ export const settingsSchema = z.object({
   liveAlertsEnabled: z.boolean().default(true),
   onboardingComplete: z.boolean().default(false),
   smsImportDone: z.boolean().default(false),
+  /** One-time pass that excludes card bills, own transfers and investments already stored. */
+  transferScanDone: z.boolean().default(false),
+  /** Send anonymous crash reports (error message and code location only). */
+  crashReportsEnabled: z.boolean().default(true),
   demoMode: z.boolean().default(false),
   accountEmail: z.string().email().nullable().default(null),
   lastSyncAt: z.number().int().nullable().default(null),

@@ -76,7 +76,13 @@ describe('Chip', () => {
     await render(<Chip label="UPI" selected onPress={jest.fn()} />);
     const chip = screen.getByRole('button', { name: 'UPI' });
     expect(chip).toBeSelected();
-    expect(screen.getByText('✓ UPI')).toBeOnTheScreen();
+    expect(screen.getByText('UPI')).toBeOnTheScreen();
+    expect(screen.getByTestId('chip-check')).toBeOnTheScreen();
+  });
+
+  it('shows no check mark when not selected', async () => {
+    await render(<Chip label="UPI" selected={false} onPress={jest.fn()} />);
+    expect(screen.queryByTestId('chip-check')).toBeNull();
   });
 });
 

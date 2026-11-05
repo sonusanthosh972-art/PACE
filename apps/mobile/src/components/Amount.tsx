@@ -1,3 +1,5 @@
+import type { StyleProp, TextStyle } from 'react-native';
+
 import { formatINR, formatINRWhole, type Paise } from '@/domain/money';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { TypeVariant } from '@/theme/tokens';
@@ -17,6 +19,7 @@ interface AmountProps {
   suffix?: string;
   /** Stay on one line and shrink the text to the available width (e.g. inside the ring). */
   fit?: boolean;
+  style?: StyleProp<TextStyle>;
 }
 
 /** A rupee amount with tabular digits. The accessibility label always carries the final value. */
@@ -29,6 +32,7 @@ export function Amount({
   prefix = '',
   suffix = '',
   fit = false,
+  style,
 }: AmountProps) {
   const { reducedMotion } = useTheme();
   const shown = useCountUp(paise, { animate: animated && !reducedMotion });
@@ -38,6 +42,7 @@ export function Amount({
       variant={variant}
       color={color}
       tabular
+      style={style}
       accessibilityLabel={`${prefix}${format(paise)}${suffix}`}
       {...(fit ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.4 } : null)}
     >

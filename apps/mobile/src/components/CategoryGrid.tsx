@@ -1,12 +1,22 @@
+import * as Haptics from 'expo-haptics';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { PICKABLE_CATEGORIES, type CategoryId } from '@/domain/categories';
 import { useTheme } from '@/theme/ThemeProvider';
-import { MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
+import { ICON, MIN_TOUCH, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
 import { AppText } from './AppText';
+import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 
+const COLUMNS = 3;
+const GAP = SPACE.sm;
+
+/**
+ * Even three-column grid of compact tiles: icon above a one-line label. Tile width comes from the
+ * measured container, so it fits any phone; long labels shrink slightly instead of being cut off.
+ */
 export function CategoryGrid({
   selected,
   onSelect,
@@ -15,36 +25,49 @@ export function CategoryGrid({
   onSelect: (id: CategoryId) => void;
 }) {
   const { colors } = useTheme();
+  const [width, setWidth] = useState(0);
+  const tileWidth = width > 0 ? Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS) : undefined;
+
   return (
-    <View style={styles.grid} accessibilityRole="radiogroup">
+    <View
+      style={styles.grid}
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Category"
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
       {PICKABLE_CATEGORIES.map((c) => {
         const isSelected = c.id === selected;
+        const catColor = colors.categories[c.id];
+
         return (
           <PressableScale
             key={c.id}
-            onPress={() => onSelect(c.id)}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => undefined);
+              onSelect(c.id);
+            }}
             accessibilityRole="radio"
             accessibilityState={{ checked: isSelected }}
             accessibilityLabel={c.label}
             style={[
-              styles.cell,
+              styles.tile,
+              tileWidth ? { width: tileWidth } : styles.tileFallback,
               {
-                backgroundColor: isSelected ? colors.elevated : colors.surface,
-                borderColor: isSelected ? colors.accent : colors.border,
+                backgroundColor: isSelected ? withAlpha(catColor, 0.14) : colors.surface,
+                borderColor: isSelected ? colors.accent : 'transparent',
               },
             ]}
           >
-            <AppText variant="heading" accessible={false}>
-              {c.emoji}
-            </AppText>
+            <Icon name={c.icon as IconName} size={ICON.md} tint={catColor} />
             <AppText
               variant="caption"
-              center
-              numberOfLines={2}
               color={isSelected ? 'text' : 'muted'}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              center
             >
-              {isSelected ? '✓ ' : ''}
-              {c.label}
+              {c.shortLabel}
             </AppText>
           </PressableScale>
         );
@@ -54,15 +77,21 @@ export function CategoryGrid({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
-  cell: {
-    width: '31.5%',
-    minHeight: MIN_TOUCH * 2,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
+  },
+  tile: {
+    minHeight: MIN_TOUCH + SPACE.xl,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.xs,
     borderRadius: RADIUS.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: SPACE.sm,
     gap: SPACE.xs,
   },
+  // Before the first layout pass: roughly a third, so nothing jumps much.
+  tileFallback: { width: '31%' },
 });

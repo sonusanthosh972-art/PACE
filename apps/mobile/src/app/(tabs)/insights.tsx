@@ -1,256 +1,310 @@
 import { router } from 'expo-router';
+import { Fragment } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Amount } from '@/components/Amount';
+import { AppHeader, HeaderBackground, TAB_GUTTER } from '@/components/AppHeader';
 import { AppText } from '@/components/AppText';
-import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
 import { DailyBars } from '@/components/charts/DailyBars';
 import { DonutChart } from '@/components/charts/DonutChart';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
-import { EmptyState, ErrorState, LoadingState } from '@/components/States';
+import { ErrorState, LoadingState } from '@/components/States';
 import { CATEGORIES } from '@/domain/categories';
 import { formatINRWhole } from '@/domain/money';
+import type { StoryLine } from '@/domain/story';
 import { formatShortDate } from '@/lib/format';
-import { useInsights, useToday, type InsightsData } from '@/state/queries';
+import { useInsights, type InsightsData } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
-import { RADIUS, SPACE } from '@/theme/tokens';
+import { ICON, MOTION, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
 export default function InsightsScreen() {
   const insights = useInsights();
-  const today = useToday();
 
   return (
-    <Screen>
-      <View style={styles.screenHeader}>
-        <AppText variant="title" accessibilityRole="header">
-          Your Money Story
-        </AppText>
-        <AppText variant="caption" color="muted">
-          Where your money went this cycle — honest, clear, and judgment-free.
-        </AppText>
-      </View>
+    <Screen background={<HeaderBackground />} backgroundScrolls gutter={TAB_GUTTER}>
+      <AppHeader title="Your Money Story" subtitle="Where your money went, in plain words." />
       {insights.isPending ? (
-        <LoadingState label="Loading insights" />
+        <LoadingState label="Loading your money story" />
       ) : insights.isError ? (
         <ErrorState onRetry={() => insights.refetch()} />
       ) : !insights.data || !insights.data.hasData ? (
-        <EmptyState
-          icon="pie-chart-outline"
-          title="Your story begins with your first payment"
-          body="As your everyday payments arrive via bank SMS or UPI, Paisa Pulse gently organizes them into clear patterns. No spreadsheets, no guilt."
-          actionLabel="Record cash spending"
-          onAction={() => router.push('/add')}
-        />
+        <StoryEmpty />
       ) : (
-        <InsightsContent
-          data={insights.data}
-          typicalBudgetPaise={today.data?.snapshot.todayBudgetPaise ?? 0}
-        />
+        <InsightsContent data={insights.data} />
       )}
     </Screen>
   );
 }
 
-function InsightsContent({
-  data,
-  typicalBudgetPaise,
-}: {
-  data: InsightsData;
-  typicalBudgetPaise: number;
-}) {
+function StoryEmpty() {
   const { colors } = useTheme();
-  const splitTotal = data.split.essentialPaise + data.split.nonEssentialPaise;
-  const essentialPct =
-    splitTotal > 0 ? Math.round((data.split.essentialPaise / splitTotal) * 100) : 0;
-  const budgetLine =
-    typicalBudgetPaise ||
-    Math.round(
-      data.days.reduce((s, d) => s + (d.budgetPaise ?? 0), 0) / Math.max(1, data.days.length),
-    );
+  return (
+    <Animated.View entering={FadeIn.duration(MOTION.screenMs)} style={styles.empty}>
+      <View style={[styles.emptyMark, { backgroundColor: withAlpha(colors.accent, 0.12) }]}>
+        <Icon name="book-outline" size={ICON.lg} color="accentText" />
+      </View>
+      <AppText variant="heading" center>
+        Your story begins with your first payment
+      </AppText>
+      <AppText color="muted" center style={styles.emptyBody}>
+        As your everyday spending arrives, Paisa Pulse gently turns it into clear patterns and
+        useful insights.
+      </AppText>
+      <Button
+        label="Record cash spending"
+        icon="add"
+        variant="secondary"
+        compact
+        onPress={() => router.push('/add')}
+      />
+    </Animated.View>
+  );
+}
+
+function SectionLabel({ title, aside }: { title: string; aside?: string }) {
+  return (
+    <View style={styles.sectionLabel}>
+      <AppText variant="overline" color="muted" accessibilityRole="header">
+        {title}
+      </AppText>
+      {aside ? (
+        <AppText variant="caption" color="muted" numberOfLines={1} style={styles.aside}>
+          {aside}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
+
+function StoryText({ line }: { line: StoryLine }) {
+  return (
+    <AppText style={styles.flex}>
+      {line.parts.map((p, i) =>
+        typeof p === 'string' ? (
+          <Fragment key={i}>{p}</Fragment>
+        ) : (
+          <AppText key={i} variant="bodyStrong">
+            {p.strong}
+          </AppText>
+        ),
+      )}
+    </AppText>
+  );
+}
+
+function InsightsContent({ data }: { data: InsightsData }) {
+  const { colors } = useTheme();
+  const budgetDays = data.days.filter((d) => d.budgetPaise !== null);
+  const budgetLine = budgetDays.length
+    ? Math.round(budgetDays.reduce((s, d) => s + (d.budgetPaise ?? 0), 0) / budgetDays.length)
+    : 0;
 
   return (
-    <>
-      <View>
-        <AppText color="muted">
+    <View style={styles.content}>
+      {/* The headline number */}
+      <View style={styles.hero}>
+        <AppText variant="overline" color="muted">
           {formatShortDate(data.cycleStart)} – {formatShortDate(data.cycleEnd)}
         </AppText>
         <Amount paise={data.totalSpentPaise} variant="hero" animated fit />
         <AppText color="muted">spent this cycle</AppText>
+        {data.week.thisWeekPaise > 0 ? (
+          <AppText variant="caption" color="muted" tabular>
+            {formatINRWhole(data.week.thisWeekPaise)} this week so far
+          </AppText>
+        ) : null}
       </View>
 
-      <Card>
-        <AppText variant="heading" accessibilityRole="header">
-          By category
-        </AppText>
-        <View style={styles.donutRow}>
-          <DonutChart
-            slices={data.byCategory}
-            totalPaise={data.categoryTotalPaise}
-            size={168}
-            stroke={22}
-          />
+      {/* Your patterns: plain sentences, no card */}
+      {data.story.length > 0 ? (
+        <View style={styles.section}>
+          <SectionLabel title="Your patterns" />
+          <View>
+            {data.story.map((line, i) => (
+              <View
+                key={line.id}
+                style={[
+                  styles.storyRow,
+                  i > 0 && {
+                    borderTopColor: colors.border,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                  },
+                ]}
+              >
+                <Icon name={line.icon as IconName} size={ICON.md} color="accentText" />
+                <StoryText line={line} />
+              </View>
+            ))}
+          </View>
         </View>
-        <View style={styles.legend}>
+      ) : null}
+
+      {/* Where your money went */}
+      <View style={styles.section}>
+        <SectionLabel
+          title="Where your money went"
+          aside={`${data.byCategory.length} ${data.byCategory.length === 1 ? 'category' : 'categories'}`}
+        />
+        <View style={[styles.surface, { backgroundColor: colors.surface }]}>
+          <View style={styles.donut}>
+            <DonutChart
+              slices={data.byCategory}
+              totalPaise={data.categoryTotalPaise}
+              size={150}
+              stroke={18}
+            />
+          </View>
           {data.byCategory.map((c) => {
             const pct =
               data.categoryTotalPaise > 0
                 ? Math.round((c.totalPaise / data.categoryTotalPaise) * 100)
                 : 0;
+            const def = CATEGORIES[c.category];
+            const tint = colors.categories[c.category];
             return (
               <View
                 key={c.category}
-                style={styles.legendRow}
+                style={styles.categoryRow}
                 accessible
-                accessibilityLabel={`${CATEGORIES[c.category].label}: ${formatINRWhole(c.totalPaise)}, ${pct} percent, ${c.count} payments`}
+                accessibilityLabel={`${def.label}: ${formatINRWhole(c.totalPaise)}, ${pct} percent, ${c.count} ${c.count === 1 ? 'payment' : 'payments'}`}
               >
-                <View style={[styles.swatch, { backgroundColor: colors.categories[c.category] }]} />
-                <AppText style={styles.flex} numberOfLines={1}>
-                  {CATEGORIES[c.category].emoji} {CATEGORIES[c.category].label}
-                </AppText>
-                <AppText color="muted" tabular>
-                  {pct}%
-                </AppText>
-                <AppText
-                  variant="bodyStrong"
-                  tabular
-                  style={styles.amountCol}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.5}
-                >
-                  {formatINRWhole(c.totalPaise)}
-                </AppText>
+                <View style={[styles.badge, { backgroundColor: withAlpha(tint, 0.14) }]}>
+                  <Icon name={def.icon as IconName} size={ICON.sm} tint={tint} />
+                </View>
+                <View style={styles.flex}>
+                  <View style={styles.categoryTop}>
+                    <AppText variant="bodyStrong" numberOfLines={1} style={styles.flex}>
+                      {def.label}
+                    </AppText>
+                    <AppText variant="bodyStrong" tabular>
+                      {formatINRWhole(c.totalPaise)}
+                    </AppText>
+                  </View>
+                  <View style={styles.categoryBottom}>
+                    <View style={[styles.track, { backgroundColor: colors.track }]}>
+                      <View style={[styles.fill, { width: `${pct}%`, backgroundColor: tint }]} />
+                    </View>
+                    <AppText variant="caption" color="muted" tabular>
+                      {pct}%
+                    </AppText>
+                  </View>
+                </View>
               </View>
             );
           })}
         </View>
-      </Card>
+      </View>
 
-      <Card>
-        <AppText variant="heading" accessibilityRole="header">
-          Daily spend vs budget
-        </AppText>
-        <DailyBars days={data.days} typicalBudgetPaise={budgetLine} />
-      </Card>
-
-      <Card>
-        <View style={styles.row}>
-          <Icon name="sparkles-outline" color="amberText" />
-          <AppText variant="heading" accessibilityRole="header">
-            Everyday comforts (under ₹500)
-          </AppText>
+      {/* Daily rhythm */}
+      <View style={styles.section}>
+        <SectionLabel
+          title="Daily rhythm"
+          aside={budgetLine > 0 ? `allowance ${formatINRWhole(budgetLine)}/day` : undefined}
+        />
+        <View style={[styles.surface, styles.chart, { backgroundColor: colors.surface }]}>
+          <DailyBars days={data.days} typicalBudgetPaise={budgetLine} />
         </View>
-        <AppText color="muted">
-          Chai, auto rides, snacks, quick treats. They add flavor to daily life — seeing the total
-          helps you stay mindful.
-        </AppText>
-        <View style={styles.row}>
-          <Amount paise={data.leaks.totalPaise} variant="title" animated fit />
-          <AppText color="muted" tabular>
-            across {data.leaks.count} {data.leaks.count === 1 ? 'payment' : 'payments'}
-          </AppText>
-        </View>
-        {data.leaks.count > 0 ? (
-          <AppText variant="caption" color="muted">
-            Averages about{' '}
-            {formatINRWhole(Math.round(data.leaks.totalPaise / Math.max(1, data.days.length)))} a
-            day in small everyday comforts.
-          </AppText>
-        ) : null}
-      </Card>
+      </View>
 
-      <Card>
-        <AppText variant="heading" accessibilityRole="header">
-          Places you visited most
-        </AppText>
-        {data.merchants.map((m, i) => (
-          <View
-            key={m.merchantNorm}
-            style={styles.legendRow}
-            accessible
-            accessibilityLabel={`${i + 1}. ${m.merchantDisplay}: ${formatINRWhole(m.totalPaise)} over ${m.count} payments`}
-          >
-            <AppText color="muted" tabular style={styles.rank}>
-              {i + 1}
-            </AppText>
-            <View style={styles.flex}>
-              <AppText variant="bodyStrong" numberOfLines={1}>
-                {m.merchantDisplay}
-              </AppText>
-              <AppText variant="caption" color="muted">
-                {m.count} {m.count === 1 ? 'payment' : 'payments'}
-              </AppText>
-            </View>
-            <AppText
-              variant="bodyStrong"
-              tabular
-              style={styles.amountCol}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.5}
-            >
-              {formatINRWhole(m.totalPaise)}
-            </AppText>
-          </View>
-        ))}
-      </Card>
-
-      <Card>
-        <AppText variant="heading" accessibilityRole="header">
-          Essentials vs life&apos;s extras
-        </AppText>
-        <AppText variant="caption" color="muted">
-          Essentials sustain your family and life. Extras bring joy. Finding harmony between both
-          creates lasting calm.
-        </AppText>
-        <View
-          style={[styles.splitBar, { backgroundColor: colors.track }]}
-          accessible
-          accessibilityLabel={`Essentials ${essentialPct} percent, extras ${100 - essentialPct} percent`}
-        >
-          <View
-            style={[
-              styles.splitFill,
-              { width: `${essentialPct}%`, backgroundColor: colors.accent },
-            ]}
-          />
-        </View>
-        <View style={styles.splitLegend}>
+      {/* Places you paid most */}
+      {data.merchants.length > 0 ? (
+        <View style={styles.section}>
+          <SectionLabel title="Where you paid most" />
           <View>
-            <AppText variant="caption" color="muted">
-              Essentials · {essentialPct}%
-            </AppText>
-            <AppText variant="bodyStrong" tabular>
-              {formatINRWhole(data.split.essentialPaise)}
-            </AppText>
-          </View>
-          <View style={styles.alignEnd}>
-            <AppText variant="caption" color="muted">
-              Extras · {100 - essentialPct}%
-            </AppText>
-            <AppText variant="bodyStrong" tabular>
-              {formatINRWhole(data.split.nonEssentialPaise)}
-            </AppText>
+            {data.merchants.map((m, i) => (
+              <View
+                key={m.merchantNorm}
+                style={[
+                  styles.merchantRow,
+                  i > 0 && {
+                    borderTopColor: colors.border,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                  },
+                ]}
+                accessible
+                accessibilityLabel={`${m.merchantDisplay}: ${formatINRWhole(m.totalPaise)} over ${m.count} ${m.count === 1 ? 'payment' : 'payments'}`}
+              >
+                <View style={styles.flex}>
+                  <AppText variant="bodyStrong" numberOfLines={1}>
+                    {m.merchantDisplay}
+                  </AppText>
+                  <AppText variant="caption" color="muted">
+                    {m.count} {m.count === 1 ? 'payment' : 'payments'}
+                  </AppText>
+                </View>
+                <AppText variant="bodyStrong" tabular numberOfLines={1} style={styles.amount}>
+                  {formatINRWhole(m.totalPaise)}
+                </AppText>
+              </View>
+            ))}
           </View>
         </View>
-      </Card>
-    </>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screenHeader: { gap: 4, marginBottom: SPACE.xs },
-  donutRow: { alignItems: 'center', paddingVertical: SPACE.sm },
-  legend: { gap: SPACE.sm },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, minHeight: 32 },
-  swatch: { width: 12, height: 12, borderRadius: 6 },
-  amountCol: { minWidth: 76, maxWidth: '40%', textAlign: 'right' },
-  rank: { width: 20 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, flexWrap: 'wrap' },
   flex: { flex: 1 },
-  splitBar: { height: 14, borderRadius: RADIUS.pill, overflow: 'hidden' },
-  splitFill: { height: '100%', borderRadius: RADIUS.pill },
-  splitLegend: { flexDirection: 'row', justifyContent: 'space-between' },
-  alignEnd: { alignItems: 'flex-end' },
+  content: { gap: SPACE.xl },
+
+  empty: { alignItems: 'center', gap: SPACE.md, paddingTop: SPACE.xxl, paddingBottom: SPACE.xl },
+  emptyMark: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACE.xs,
+  },
+  emptyBody: { maxWidth: 320, marginBottom: SPACE.sm },
+
+  hero: { gap: SPACE.xs },
+  section: { gap: SPACE.sm },
+  sectionLabel: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACE.md,
+  },
+  aside: { flexShrink: 1, textAlign: 'right' },
+
+  storyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACE.md,
+    paddingVertical: SPACE.md,
+  },
+
+  surface: { borderRadius: RADIUS.lg, padding: SPACE.lg, gap: SPACE.md },
+  chart: { padding: SPACE.md },
+  donut: { alignItems: 'center', paddingBottom: SPACE.xs },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  badge: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  categoryBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginTop: SPACE.xs,
+  },
+  track: { flex: 1, height: 4, borderRadius: RADIUS.pill, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: RADIUS.pill },
+
+  merchantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.md,
+    paddingVertical: SPACE.md,
+  },
+  amount: { maxWidth: '45%' },
 });

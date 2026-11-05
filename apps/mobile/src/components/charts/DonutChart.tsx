@@ -10,8 +10,13 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { AppText } from '../AppText';
 
 export interface DonutSlice {
-  category: CategoryId;
+  /** null for a combined "Others" slice. */
+  category: CategoryId | null;
   totalPaise: number;
+  /** Stable key when `category` is null. */
+  key?: string;
+  /** Overrides the category colour. */
+  color?: string;
 }
 
 const GAP_DEG = 2;
@@ -22,11 +27,13 @@ export function DonutChart({
   totalPaise,
   size = 200,
   stroke = 26,
+  centerLabel = 'This cycle',
 }: {
   slices: readonly DonutSlice[];
   totalPaise: number;
   size?: number;
   stroke?: number;
+  centerLabel?: string;
 }) {
   const { colors, reducedMotion } = useTheme();
   const reveal = useSharedValue(reducedMotion ? 1 : 0);
@@ -39,7 +46,7 @@ export function DonutChart({
     const inset = stroke / 2 + 1;
     const rect = { x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 };
     const visible = slices.filter((s) => s.totalPaise > 0);
-    const result: { key: CategoryId; path: SkPath; color: string }[] = [];
+    const result: { key: string; path: SkPath; color: string }[] = [];
     for (let i = 0, angle = -90; i < visible.length; i += 1) {
       const s = visible[i];
       if (!s) continue;
@@ -48,14 +55,18 @@ export function DonutChart({
         .addArc(rect, angle + GAP_DEG / 2, Math.max(0.5, sweep - GAP_DEG))
         .detach();
       angle += sweep;
-      result.push({ key: s.category, path, color: colors.categories[s.category] });
+      result.push({
+        key: s.key ?? s.category ?? `slice-${i}`,
+        path,
+        color: s.color ?? (s.category ? colors.categories[s.category] : colors.muted),
+      });
     }
     return result;
   }, [slices, totalPaise, size, stroke, colors]);
 
   const summary = slices
     .slice(0, 4)
-    .map((s) => `${CATEGORIES[s.category].label} ${formatINRWhole(s.totalPaise)}`)
+    .map((s) => `${s.category ? CATEGORIES[s.category].label : 'Others'} ${formatINRWhole(s.totalPaise)}`)
     .join(', ');
 
   return (
@@ -80,9 +91,6 @@ export function DonutChart({
       </Canvas>
       <View style={styles.center} importantForAccessibility="no-hide-descendants">
         <View style={{ width: Math.round((size - stroke * 2) * 0.8), alignItems: 'center' }}>
-          <AppText variant="caption" color="muted">
-            This cycle
-          </AppText>
           <AppText
             variant="heading"
             tabular
@@ -91,6 +99,9 @@ export function DonutChart({
             minimumFontScale={0.5}
           >
             {formatINRWhole(totalPaise)}
+          </AppText>
+          <AppText variant="caption" color="muted" numberOfLines={1}>
+            {centerLabel}
           </AppText>
         </View>
       </View>

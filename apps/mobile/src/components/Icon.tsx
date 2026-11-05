@@ -12,17 +12,20 @@ export function Icon({
   name,
   size = 22,
   color = 'text',
+  tint,
 }: {
   name: IconName;
   size?: number;
   color?: TextColor | 'amber' | 'coral';
+  /** A raw colour (e.g. a category colour); overrides `color`. */
+  tint?: string;
 }) {
   const { colors } = useTheme();
   return (
     <Ionicons
       name={name}
       size={size}
-      color={colors[color]}
+      color={tint ?? colors[color]}
       accessible={false}
       importantForAccessibility="no"
     />

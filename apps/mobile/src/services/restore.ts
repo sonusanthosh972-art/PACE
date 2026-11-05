@@ -7,6 +7,7 @@ import {
   replaceFixedExpenses,
   saveProfile,
 } from '@/data/profileRepo';
+import { setSetting } from '@/data/settingsRepo';
 import { isDeleted, type Clock } from '@/data/transactionsRepo';
 import { toDateKey } from '@/domain/time';
 
@@ -193,6 +194,9 @@ export async function restoreFromServer(
 
   // 5. Recompute daily budget with restored profile and transactions
   await clearBudgetsFrom(db, toDateKey(Date.now()));
+
+  // 6. Look for card bills, own transfers and investments among the restored payments.
+  await setSetting(db, 'transferScanDone', false);
 
   return { restoredProfile, restoredTransactions };
 }

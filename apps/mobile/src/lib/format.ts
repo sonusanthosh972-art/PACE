@@ -71,6 +71,11 @@ export const MODE_LABELS: Record<Mode, string> = {
   OTHER: 'Other',
 };
 
+/** How it was paid, as shown on a row: payments recorded by hand are cash. */
+export function modeLabel(tx: Pick<Transaction, 'mode' | 'source'>): string {
+  return tx.source === 'manual' && tx.mode === 'OTHER' ? 'Cash' : MODE_LABELS[tx.mode];
+}
+
 export function txTitle(tx: Pick<Transaction, 'merchant' | 'vpa' | 'mode' | 'source' | 'note'>) {
   if (tx.merchant || tx.vpa) return displayMerchant(tx.merchant, tx.vpa);
   if (tx.mode === 'ATM') return 'ATM withdrawal';

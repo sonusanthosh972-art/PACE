@@ -52,11 +52,13 @@ it('uses the specified base colours', () => {
     coral: '#E08A7A',
   });
   expect(PALETTES.light).toMatchObject({
-    bg: '#F5F3EE',
-    surface: '#FCFBF8',
+    bg: '#F7F8F5',
+    surface: '#F1F3EF',
     text: '#24262A',
     muted: '#6B6A66',
-    accent: '#3E8E6B',
+    accent: '#72CFA9',
+    accentFill: '#72CFA9',
+    onAccent: '#16171A',
     amber: '#B07C2A',
     coral: '#B85A4A',
   });

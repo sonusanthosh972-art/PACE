@@ -6,6 +6,7 @@ import {
   type ParsedTransaction,
   type Source,
 } from '../transaction';
+import { EXCLUDE_NOTES, type AutoExcludeReason } from '../transfers';
 
 /* ------------------------------------------------------------------------------------------
  * Rejection rules: anything that is not a completed money movement.
@@ -230,14 +231,11 @@ export function parseTransactionText(
   const accountMatch = ACCOUNT_RE.exec(text) ?? MASKED_ACCOUNT_RE.exec(text);
   const refMatch = SLASH_REF_RE.exec(text) ?? REF_RE.exec(text);
 
-  const isCcBill = CC_BILL_RE.test(text);
-  const isSelfTransfer = SELF_TRANSFER_RE.test(text);
-  const isExcluded = isCcBill || isSelfTransfer;
-  const note = isCcBill
-    ? "Credit card bill payment — excluded so expenses aren't counted twice"
-    : isSelfTransfer
-      ? 'Transfer between your own accounts'
-      : undefined;
+  const excludeReason: AutoExcludeReason | null = CC_BILL_RE.test(text)
+    ? 'card_bill'
+    : SELF_TRANSFER_RE.test(text)
+      ? 'self_transfer'
+      : null;
 
   const candidate: ParsedTransaction = {
     amountPaise,
@@ -250,8 +248,9 @@ export function parseTransactionText(
     balancePaise: balance?.value ?? null,
     occurredAt,
     source,
-    isExcluded: isExcluded ? true : undefined,
-    note,
+    isExcluded: excludeReason ? true : undefined,
+    excludeReason: excludeReason ?? undefined,
+    note: excludeReason ? EXCLUDE_NOTES[excludeReason] : undefined,
   };
 
   const parsed = parsedTransactionSchema.safeParse(candidate);

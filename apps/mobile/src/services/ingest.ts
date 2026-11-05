@@ -2,7 +2,13 @@ import type { PendingItem } from '../../modules/sms-reader';
 
 import type { SqlDb } from '@/data/db';
 import { setSetting } from '@/data/settingsRepo';
-import { ingestParsed, isDeleted, type Clock } from '@/data/transactionsRepo';
+import {
+  detectTransfers,
+  getById,
+  ingestParsed,
+  isDeleted,
+  type Clock,
+} from '@/data/transactionsRepo';
 import { computeDedupeHash } from '@/domain/dedupe';
 import { parseNotification, parseSms } from '@/domain/parsing/parseSms';
 import { DAY_MS } from '@/domain/time';
@@ -77,7 +83,34 @@ async function ingestItemsNow(
       else summary.duplicates += 1;
     }
   });
+  summary.inserted = await excludeTransfersAmong(db, summary.inserted, clock);
   return summary;
+}
+
+/**
+ * Runs transfer detection around the new payments (the other half of a transfer may have arrived
+ * earlier) and returns them re-read, so alerts never announce a transfer as spending.
+ */
+async function excludeTransfersAmong(
+  db: SqlDb,
+  inserted: readonly Transaction[],
+  clock: Clock,
+): Promise<Transaction[]> {
+  if (inserted.length === 0) return [];
+  let from = Infinity;
+  let to = -Infinity;
+  for (const t of inserted) {
+    from = Math.min(from, t.occurredAt);
+    to = Math.max(to, t.occurredAt + 1);
+  }
+  const excluded = await detectTransfers(db, from, to, clock);
+  if (excluded.length === 0) return [...inserted];
+  const changed = new Set(excluded);
+  const fresh: Transaction[] = [];
+  for (const tx of inserted) {
+    fresh.push(changed.has(tx.id) ? ((await getById(db, tx.id)) ?? tx) : tx);
+  }
+  return fresh;
 }
 
 export interface SmsSource {

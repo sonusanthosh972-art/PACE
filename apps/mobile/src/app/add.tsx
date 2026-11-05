@@ -48,40 +48,56 @@ export default function AddSheet() {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.sheetHeader}>
         <AppText variant="title" accessibilityRole="header">
-          Record cash payment
+          Record cash spending
         </AppText>
         <AppText variant="caption" color="muted">
-          Paid in cash for chai, auto, groceries, or tips? Record it here to keep your daily
-          allowance perfectly accurate.
+          Chai, auto, vegetables, tips. Adding cash keeps today&apos;s number honest.
         </AppText>
       </View>
-      <MoneyField
-        label="Amount paid"
-        valuePaise={amount}
-        onChangePaise={setAmount}
-        large
-        autoFocus
-      />
-      <AppText variant="label">Category</AppText>
-      <CategoryGrid selected={category} onSelect={setCategory} />
-      <TextField
-        label="Note (optional)"
-        placeholder="Chai, auto, vegetables…"
-        value={note}
-        onChangeText={setNote}
-        maxLength={120}
-      />
+
+      <View style={styles.section}>
+        <MoneyField
+          label="How much?"
+          valuePaise={amount}
+          onChangePaise={setAmount}
+          large
+          autoFocus
+        />
+      </View>
+
+      <View style={styles.section}>
+        <AppText variant="overline" color="muted" accessibilityRole="header">
+          Category
+        </AppText>
+        <CategoryGrid selected={category} onSelect={setCategory} />
+      </View>
+
+      <View style={styles.section}>
+        <TextField
+          label="Note · optional"
+          placeholder="Chai, auto, vegetables…"
+          value={note}
+          onChangeText={setNote}
+          maxLength={120}
+        />
+      </View>
+
       {error ? (
         <AppText variant="caption" color="coralText" accessibilityRole="alert">
           {error}
         </AppText>
       ) : null}
-      <Button label="Save" icon="checkmark" onPress={save} loading={saving} />
+
+      <View style={styles.actionWrap}>
+        <Button label="Add spending" icon="checkmark" onPress={save} loading={saving} />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: SPACE.xl, gap: SPACE.lg, paddingBottom: SPACE.xxxl },
-  sheetHeader: { gap: 4 },
+  sheetHeader: { gap: SPACE.xs },
+  section: { gap: SPACE.sm },
+  actionWrap: { paddingTop: SPACE.xs },
 });

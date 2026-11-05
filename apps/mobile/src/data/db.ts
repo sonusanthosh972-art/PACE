@@ -118,6 +118,18 @@ export const MIGRATIONS: readonly string[] = [
      instead of (money left ÷ days left). Recompute today; past days keep what they were judged by. */ `
   DELETE FROM daily_budgets WHERE date >= date('now', '+330 minutes');
   `,
+  /* v6: why a payment is excluded ('card_bill' | 'self_transfer' | 'investment' decided by the
+     app, 'user' when the user chose). The app never overrides a 'user' decision. Rules can now also
+     mark a payee as "never an expense". Existing exclusions keep their parser note's reason. */ `
+  ALTER TABLE transactions ADD COLUMN exclude_reason TEXT;
+  UPDATE transactions SET exclude_reason = CASE
+      WHEN note LIKE 'Credit card bill payment%' THEN 'card_bill'
+      WHEN note = 'Transfer between your own accounts' THEN 'self_transfer'
+      ELSE 'user' END
+    WHERE is_excluded = 1;
+  ALTER TABLE user_rules ADD COLUMN excludes INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX idx_tx_review ON transactions (needs_review, is_excluded, occurred_at DESC);
+  `,
 ];
 
 export async function migrate(db: SqlDb): Promise<number> {

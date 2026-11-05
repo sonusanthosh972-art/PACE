@@ -25,7 +25,7 @@ cd "$ROOT/apps/mobile"
 step "mobile: tsc --noEmit";  npx tsc --noEmit
 step "mobile: expo lint";     npx expo lint
 step "mobile: jest";          npx jest --ci --no-watchman
-step "mobile: expo-doctor";   npx --prefer-offline expo-doctor 2>/dev/null || echo "expo-doctor skipped (offline or not locally installed)"
+step "mobile: expo-doctor";   if [ -x node_modules/.bin/expo-doctor ]; then node_modules/.bin/expo-doctor; else echo "expo-doctor skipped (not installed in node_modules)"; fi
 
 cd "$ROOT/apps/api-node"
 step "api: typecheck";  npm run typecheck

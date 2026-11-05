@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
+import { StyleSheet } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { FONT } from '@/theme/tokens';
@@ -8,8 +9,8 @@ import { FONT } from '@/theme/tokens';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const TABS: { name: string; title: string; icon: IconName; iconActive: IconName }[] = [
-  { name: 'index', title: 'Today', icon: 'sunny-outline', iconActive: 'sunny' },
-  { name: 'insights', title: 'Insights', icon: 'pie-chart-outline', iconActive: 'pie-chart' },
+  { name: 'index', title: 'Today', icon: 'home-outline', iconActive: 'home' },
+  { name: 'insights', title: 'Insights', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
   { name: 'transactions', title: 'Transactions', icon: 'list-outline', iconActive: 'list' },
   { name: 'settings', title: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
 ];
@@ -26,8 +27,9 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: { fontFamily: FONT.medium, fontSize: 12 },
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.nav,
           borderTopColor: colors.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
           minHeight: 64,
           paddingTop: 6,
         },

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CATEGORY_IDS } from './categories';
+import { EXCLUDE_REASONS } from './transfers';
 
 export const DIRECTIONS = ['debit', 'credit'] as const;
 export const MODES = ['UPI', 'CARD', 'NEFT', 'IMPS', 'ATM', 'AUTOPAY', 'OTHER'] as const;
@@ -31,6 +32,8 @@ export const parsedTransactionSchema = z.object({
   occurredAt: z.number().int().positive(),
   source: z.enum(SOURCES),
   isExcluded: z.boolean().optional(),
+  /** Why it is excluded: decided by the app (card bill, own transfer, investment) or the user. */
+  excludeReason: z.enum(EXCLUDE_REASONS).nullable().optional(),
   note: z.string().max(280).nullable().optional(),
 });
 

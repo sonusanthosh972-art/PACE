@@ -1,19 +1,20 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Platform, StyleSheet, View } from 'react-native';
 
 import * as SmsReader from '../../../modules/sms-reader';
 
+import { AppHeader, HeaderBackground, TAB_GUTTER } from '@/components/AppHeader';
 import { AppLogo } from '@/components/AppLogo';
 import { AppText } from '@/components/AppText';
-import { Card } from '@/components/Card';
-import { ListRow, SectionTitle, Segmented } from '@/components/Controls';
+import { ListRow, RowGroup, SectionTitle, Segmented } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
 import type { Settings } from '@/data/settingsRepo';
 import { formatINRWhole, sumPaise } from '@/domain/money';
 import { formatTimeOfDay, ordinal } from '@/lib/format';
+import { getPermissionState, type PermissionState } from '@/lib/permissions';
 import { exportCsv, updateSetting } from '@/services/actions';
 import {
   authenticateWithBiometrics,
@@ -65,6 +66,24 @@ export default function SettingsScreen() {
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioName, setBioName] = useState('Fingerprint');
+  const [smsState, setSmsState] = useState<PermissionState>('undetermined');
+  const [notifAccess, setNotifAccess] = useState(false);
+
+  // Re-checked on return from the system settings, where these are changed.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !SmsReader.isAvailable()) return;
+    const check = () => {
+      getPermissionState('sms')
+        .then(setSmsState)
+        .catch(() => undefined);
+      setNotifAccess(SmsReader.isNotificationAccessGranted());
+    };
+    check();
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') check();
+    });
+    return () => sub.remove();
+  }, []);
 
   // Turning the lock on or off both need the owner's confirmation.
   const onToggleBiometrics = async () => {
@@ -90,16 +109,25 @@ export default function SettingsScreen() {
     };
   }, []);
 
+  const header = <AppHeader title="Settings" subtitle="Your budget, alerts and data." />;
+  const screenProps = {
+    background: <HeaderBackground />,
+    backgroundScrolls: true,
+    gutter: TAB_GUTTER,
+  } as const;
+
   if (settings.isPending || profile.isPending) {
     return (
-      <Screen>
+      <Screen {...screenProps}>
+        {header}
         <LoadingState rows={6} label="Loading settings" />
       </Screen>
     );
   }
   if (settings.isError || profile.isError || !settings.data) {
     return (
-      <Screen>
+      <Screen {...screenProps}>
+        {header}
         <ErrorState onRetry={() => Promise.all([settings.refetch(), profile.refetch()])} />
       </Screen>
     );
@@ -123,48 +151,82 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen>
-      <AppText variant="title" accessibilityRole="header">
-        Settings
-      </AppText>
+    <Screen {...screenProps}>
+      {header}
 
       <SectionTitle>Budget</SectionTitle>
-      <View style={styles.group}>
+      <RowGroup>
         <ListRow
           icon="cash-outline"
-          title="Salary & payday"
+          title="Monthly income"
           value={p ? formatINRWhole(p.monthlySalaryPaise) : '—'}
-          subtitle={p ? `Paid on the ${ordinal(p.payday)}` : undefined}
+          subtitle={p ? `Payday on the ${ordinal(p.payday)}` : undefined}
           onPress={() => router.push('/settings/budget')}
+          flush
         />
         <ListRow
           icon="home-outline"
           title="Fixed expenses"
           value={formatINRWhole(fixedTotal)}
-          subtitle={p ? `${p.fixedExpenses.length} items` : undefined}
+          subtitle={
+            p
+              ? `${p.fixedExpenses.length} ${p.fixedExpenses.length === 1 ? 'item' : 'items'}`
+              : undefined
+          }
           onPress={() => router.push('/settings/fixed-expenses')}
+          flush
         />
         <ListRow
           icon="trending-up-outline"
           title="Savings goal"
           value={p ? formatINRWhole(p.monthlySavingsGoalPaise) : '—'}
           onPress={() => router.push('/settings/budget')}
+          flush
         />
-      </View>
+      </RowGroup>
 
       <SectionTitle>Notifications</SectionTitle>
-      <View style={styles.group}>
+      <RowGroup>
         <ListRow
           icon="notifications-outline"
           title="Times & alerts"
-          subtitle={
+          value={
             s.notificationsEnabled
-              ? `Morning ${formatTimeOfDay(s.morningTime)} · Night ${formatTimeOfDay(s.nightTime)}`
+              ? `${formatTimeOfDay(s.morningTime)} · ${formatTimeOfDay(s.nightTime)}`
               : 'Off'
           }
           onPress={() => router.push('/settings/notifications')}
+          flush
         />
-      </View>
+      </RowGroup>
+
+      <SectionTitle>Data sources</SectionTitle>
+      <RowGroup>
+        <ListRow
+          icon="chatbox-ellipses-outline"
+          title="Bank SMS"
+          value={smsAvailable ? (smsState === 'granted' ? 'Connected' : 'Not allowed') : undefined}
+          subtitle={
+            smsAvailable
+              ? 'Only messages from bank senders are read'
+              : 'Available on Android builds'
+          }
+          onPress={smsAvailable ? () => SmsReader.openAppSettings() : undefined}
+          flush
+        />
+        <ListRow
+          icon="notifications-circle-outline"
+          title="Payment app alerts"
+          value={smsAvailable ? (notifAccess ? 'On' : 'Off') : undefined}
+          subtitle={
+            smsAvailable
+              ? 'Backup for missed SMS: GPay, PhonePe, Paytm'
+              : 'Available on Android builds'
+          }
+          onPress={smsAvailable ? () => SmsReader.openNotificationAccessSettings() : undefined}
+          flush
+        />
+      </RowGroup>
 
       <SectionTitle>Appearance</SectionTitle>
       <Segmented
@@ -177,48 +239,22 @@ export default function SettingsScreen() {
         }}
       />
 
-      <SectionTitle>Data sources</SectionTitle>
-      <View style={styles.group}>
-        <ListRow
-          icon="chatbox-ellipses-outline"
-          title="Bank SMS"
-          subtitle={
-            smsAvailable
-              ? 'Only messages from bank senders are read'
-              : 'Available on Android builds'
-          }
-          onPress={smsAvailable ? () => SmsReader.openAppSettings() : undefined}
-        />
-        <ListRow
-          icon="notifications-circle-outline"
-          title="Payment app notifications"
-          subtitle={
-            smsAvailable
-              ? SmsReader.isNotificationAccessGranted()
-                ? 'On · GPay, PhonePe, Paytm and bank apps'
-                : 'Off · backup source for missed SMS'
-              : 'Available on Android builds'
-          }
-          onPress={smsAvailable ? () => SmsReader.openNotificationAccessSettings() : undefined}
-        />
-      </View>
-
-      <SectionTitle>Account & Backup</SectionTitle>
-      <View style={styles.group}>
+      <SectionTitle>Account & security</SectionTitle>
+      <RowGroup>
         <ListRow
           icon={isAuthenticated ? 'cloud-done-outline' : 'person-circle-outline'}
           title={
             isAuthenticated
               ? user?.name || user?.email || 'Cloud backup'
-              : 'Sign in / Create account'
+              : 'Sign in or create account'
           }
           subtitle={
             isAuthenticated
               ? formatBackupStatus(syncStatus, lastSyncedAt, nextRetrySeconds)
-              : 'Sign in to mirror or restore with your private server'
+              : 'Back up and restore on a new phone'
           }
-          value={isAuthenticated ? 'On' : 'Off'}
           onPress={() => router.push('/settings/auth')}
+          flush
         />
         {bioAvailable ? (
           <ListRow
@@ -227,22 +263,24 @@ export default function SettingsScreen() {
             subtitle={
               bioEnabled
                 ? `Asks for your ${bioName.toLowerCase()} when you open the app`
-                : 'Off: anyone with your phone can open the app'
+                : 'Anyone with your phone can open the app'
             }
             value={bioEnabled ? 'On' : 'Off'}
             onPress={onToggleBiometrics}
+            flush
           />
         ) : null}
-      </View>
+      </RowGroup>
 
       <SectionTitle>Your data</SectionTitle>
-      <View style={styles.group}>
+      <RowGroup>
         {s.demoMode ? (
           <ListRow
             icon="flask-outline"
             title="Use my real data"
             subtitle="Remove the sample payments and read your bank SMS"
             onPress={() => router.push('/settings/exit-sample')}
+            flush
           />
         ) : null}
         <ListRow
@@ -250,6 +288,7 @@ export default function SettingsScreen() {
           title={exporting ? 'Preparing CSV…' : 'Export CSV'}
           subtitle="All transactions, for Excel or Sheets"
           onPress={exporting ? undefined : onExport}
+          flush
         />
         <ListRow
           icon="trash-outline"
@@ -257,39 +296,24 @@ export default function SettingsScreen() {
           subtitle="From this phone and the server"
           danger
           onPress={() => router.push('/settings/delete-data')}
+          flush
         />
-      </View>
+      </RowGroup>
 
-      <SectionTitle>About</SectionTitle>
-      <Card style={styles.aboutCard}>
-        <View style={styles.aboutRow}>
-          <AppLogo size={40} variant="mark" animated />
-          <View style={styles.aboutText}>
-            <AppText variant="bodyStrong">Paisa Pulse</AppText>
-            <AppText variant="caption" color="accentText">
-              Powered by PACE Engine · v1.0
-            </AppText>
-          </View>
-        </View>
-        <AppText variant="caption" color="muted">
-          Crafted to give every person clarity, dignity, and peace of mind over their everyday
-          finances.
+      <View style={styles.about}>
+        <AppLogo size={32} variant="mark" />
+        <AppText variant="bodyStrong">Paisa Pulse</AppText>
+        <AppText variant="caption" color="muted" center style={styles.aboutBody}>
+          Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to
+          your server.
+          {s.demoMode ? '\nSample data mode is on.' : ''}
         </AppText>
-      </Card>
-
-      <AppText variant="caption" color="muted" center style={styles.footer}>
-        Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to your
-        server.
-        {s.demoMode ? '\nSample data mode is on.' : ''}
-      </AppText>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  group: { gap: SPACE.sm },
-  aboutCard: { padding: SPACE.md + 4, gap: SPACE.sm },
-  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
-  aboutText: { gap: 2 },
-  footer: { marginTop: SPACE.lg },
+  about: { alignItems: 'center', gap: SPACE.xs, marginTop: SPACE.xxl, marginBottom: SPACE.xl },
+  aboutBody: { maxWidth: 320 },
 });

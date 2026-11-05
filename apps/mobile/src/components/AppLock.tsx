@@ -30,6 +30,11 @@ export const RELOCK_AFTER_MS = 30_000;
 
 interface AppLockProps {
   onboardingComplete: boolean;
+  /**
+   * False while the splash screen is still on top. The lock is mounted under the splash so the
+   * app is never visible without it, but the fingerprint prompt waits until the splash is gone.
+   */
+  canPrompt?: boolean;
 }
 
 /**
@@ -37,7 +42,7 @@ interface AppLockProps {
  * phone has a screen lock. Unlocks with fingerprint/face or the phone's own PIN; a signed-in user
  * can also use their account password. There is no way past it without one of those.
  */
-export function AppLock({ onboardingComplete }: AppLockProps) {
+export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) {
   const { colors } = useTheme();
   const isLocked = useLockStore((s) => s.isLocked);
   const unlock = useLockStore((s) => s.unlock);
@@ -51,6 +56,8 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
   const [biometryName, setBiometryName] = useState('Fingerprint');
   const [authenticating, setAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  /** Hides the app while it is in the background, so returning never shows it before the lock. */
+  const [covered, setCovered] = useState(false);
 
   // Account password unlock (signed-in users only)
   const [passwordMode, setPasswordMode] = useState(false);
@@ -111,14 +118,26 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
 
   // Prompt once automatically when the lock screen appears
   useEffect(() => {
-    if (isLocked && onboardingComplete && lockEnabled && !autoPromptTriggered.current) {
+    if (
+      isLocked &&
+      onboardingComplete &&
+      lockEnabled &&
+      canPrompt &&
+      !autoPromptTriggered.current
+    ) {
       autoPromptTriggered.current = true;
       const timer = setTimeout(() => {
         triggerDeviceUnlock();
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [isLocked, onboardingComplete, lockEnabled, triggerDeviceUnlock]);
+  }, [isLocked, onboardingComplete, lockEnabled, canPrompt, triggerDeviceUnlock]);
+
+  // Last known lock setting, read inside the AppState listener without re-subscribing.
+  const lockOnRef = useRef(false);
+  useEffect(() => {
+    if (lockEnabled !== null) lockOnRef.current = lockEnabled;
+  }, [lockEnabled]);
 
   // Lock again after the app has been away for a while
   useEffect(() => {
@@ -127,6 +146,9 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (nextState === 'background') {
         backgroundTimeRef.current = Date.now();
+        // Cover now, while leaving: on return the cover is already up, so the money screens
+        // never show for a moment before the lock decides.
+        if (lockOnRef.current) setCovered(true);
       } else if (nextState === 'active') {
         const awayMs = Date.now() - backgroundTimeRef.current;
         if (backgroundTimeRef.current > 0 && awayMs > RELOCK_AFTER_MS) {
@@ -139,6 +161,7 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
           autoPromptTriggered.current = false;
         }
         backgroundTimeRef.current = 0;
+        setCovered(false);
       }
     });
 
@@ -174,14 +197,17 @@ export function AppLock({ onboardingComplete }: AppLockProps) {
   };
 
   // If app is not onboarded or already unlocked, do not display lock
-  if (!onboardingComplete || !isLocked || lockEnabled === false) {
+  if (!onboardingComplete || ((!isLocked || lockEnabled === false) && !covered)) {
     return null;
   }
 
-  // Still checking: cover the data without showing anything to tap yet.
-  if (lockEnabled === null) {
+  // Still checking, or away from the app: cover the data without showing anything to tap yet.
+  if (lockEnabled === null || !isLocked) {
     return (
-      <View style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.bg }]} />
+      <View
+        testID="app-lock-cover"
+        style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.bg }]}
+      />
     );
   }
 

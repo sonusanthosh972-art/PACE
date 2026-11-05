@@ -13,6 +13,7 @@ import { setSetting, wipeAllLocalData, type Settings } from '@/data/settingsRepo
 import {
   addManual,
   deleteTransaction,
+  excludePayee,
   listTransactions,
   recategorise,
   setExcluded,
@@ -46,6 +47,14 @@ export async function setTransactionExcluded(id: string, excluded: boolean): Pro
   const db = await getAppDb();
   await setExcluded(db, id, excluded, systemClock);
   onLocalChange(db);
+}
+
+/** "Never an expense" for this payee: this payment, past ones and future ones. */
+export async function excludePayeeAlways(id: string): Promise<number> {
+  const db = await getAppDb();
+  const changed = await excludePayee(db, id, systemClock);
+  onLocalChange(db);
+  return changed;
 }
 
 export async function removeTransaction(id: string): Promise<void> {

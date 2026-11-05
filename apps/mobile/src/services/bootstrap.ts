@@ -3,7 +3,9 @@ import { Platform } from 'react-native';
 import * as SmsReader from '../../modules/sms-reader';
 
 import { getAppDb } from '@/data/appDb';
-import { getSettings } from '@/data/settingsRepo';
+import { getSettings, setSetting } from '@/data/settingsRepo';
+import { detectTransfers } from '@/data/transactionsRepo';
+import { DAY_MS } from '@/domain/time';
 
 import { systemClock } from './clock';
 import { importRecentSms, ingestPending, type IngestSummary } from './ingest';
@@ -20,6 +22,12 @@ export async function refreshFromDevice(onImportStart?: () => void): Promise<Ing
   const db = await getAppDb();
   const settings = await getSettings(db);
   if (!settings.onboardingComplete || settings.demoMode) return null;
+
+  if (!settings.transferScanDone) {
+    // Payments stored before transfer detection existed (or restored from the server).
+    await detectTransfers(db, 0, systemClock.now() + DAY_MS, systemClock);
+    await setSetting(db, 'transferScanDone', true);
+  }
 
   const permission = await SmsReader.getSmsPermissions();
   const inserted: IngestSummary['inserted'] = [];

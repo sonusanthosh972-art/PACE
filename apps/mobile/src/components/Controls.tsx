@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import type { ReactNode } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { Children, Fragment, type ReactNode } from 'react';
+import { StyleSheet, Switch, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ordinal } from '@/lib/format';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -100,9 +100,21 @@ interface ListRowProps {
   onPress?: () => void;
   danger?: boolean;
   right?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  flush?: boolean;
 }
 
-export function ListRow({ icon, title, value, subtitle, onPress, danger, right }: ListRowProps) {
+export function ListRow({
+  icon,
+  title,
+  value,
+  subtitle,
+  onPress,
+  danger,
+  right,
+  style,
+  flush,
+}: ListRowProps) {
   const { colors } = useTheme();
   return (
     <PressableScale
@@ -110,7 +122,12 @@ export function ListRow({ icon, title, value, subtitle, onPress, danger, right }
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={[title, value, subtitle].filter(Boolean).join(', ')}
-      style={[styles.listRow, { backgroundColor: colors.surface }]}
+      style={[
+        styles.listRow,
+        { backgroundColor: flush ? 'transparent' : colors.surface },
+        flush && styles.flushRow,
+        style,
+      ]}
     >
       {icon ? <Icon name={icon} color={danger ? 'coralText' : 'muted'} /> : null}
       <View style={styles.listMiddle}>
@@ -167,9 +184,28 @@ export function SwitchRow({
   );
 }
 
+/**
+ * A settings group: rows straight on the page background, divided by hairlines inset past the
+ * icon. No card around it; spacing and the section title do the grouping.
+ */
+export function RowGroup({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  const rows = Children.toArray(children).filter(Boolean);
+  return (
+    <View>
+      {rows.map((row, i) => (
+        <Fragment key={i}>
+          {i > 0 ? <View style={[styles.rowDivider, { backgroundColor: colors.border }]} /> : null}
+          {row}
+        </Fragment>
+      ))}
+    </View>
+  );
+}
+
 export function SectionTitle({ children }: { children: string }) {
   return (
-    <AppText variant="label" color="muted" accessibilityRole="header" style={styles.section}>
+    <AppText variant="overline" color="muted" accessibilityRole="header" style={styles.section}>
       {children}
     </AppText>
   );
@@ -241,9 +277,18 @@ const styles = StyleSheet.create({
     paddingVertical: SPACE.md,
     borderRadius: RADIUS.md,
   },
+  // Flush rows sit on the page itself, aligned with the screen's own padding.
+  flushRow: {
+    borderRadius: 0,
+    paddingHorizontal: 0,
+  },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 22 + SPACE.md,
+  },
   listMiddle: { flex: 1, gap: 2 },
   listValue: { maxWidth: '40%' },
-  section: { marginTop: SPACE.md, textTransform: 'uppercase', letterSpacing: 0.8 },
+  section: { marginTop: SPACE.lg, marginBottom: -SPACE.xs },
   stepHeader: { gap: SPACE.sm, marginBottom: SPACE.md },
   dots: { flexDirection: 'row', gap: 6, marginBottom: SPACE.sm },
   dot: { height: 6, borderRadius: 3 },

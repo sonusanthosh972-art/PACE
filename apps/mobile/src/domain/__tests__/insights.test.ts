@@ -1,4 +1,5 @@
 import {
+  categoryTiles,
   dailySpend,
   essentialSplit,
   smallLeaks,
@@ -81,5 +82,27 @@ describe('dailySpend with refunds', () => {
     const buy = tx({ amountPaise: 1000_00, category: 'shopping' });
     expect(dailySpend([refund, buy]).get('2026-10-24')).toBe(700_00);
     expect(dailySpend([buy, refund]).get('2026-10-24')).toBe(700_00);
+  });
+});
+
+describe('categoryTiles', () => {
+  it('shows the everyday defaults when nothing was spent', () => {
+    expect(categoryTiles([])).toEqual([
+      { category: 'food', totalPaise: 0 },
+      { category: 'transport', totalPaise: 0 },
+      { category: 'shopping', totalPaise: 0 },
+      { category: 'bills', totalPaise: 0 },
+    ]);
+  });
+
+  it("puts today's biggest categories first, then fills with defaults, never repeating", () => {
+    const tiles = categoryTiles([
+      tx({ amountPaise: 5000, category: 'health' }),
+      tx({ amountPaise: 9000, category: 'food' }),
+      tx({ amountPaise: 2000, category: 'uncategorised' }),
+      tx({ amountPaise: 7000, category: 'shopping', isExcluded: true }),
+    ]);
+    expect(tiles.map((t) => t.category)).toEqual(['food', 'health', 'transport', 'shopping']);
+    expect(tiles[0]?.totalPaise).toBe(9000);
   });
 });

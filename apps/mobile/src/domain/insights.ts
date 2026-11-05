@@ -105,3 +105,30 @@ export function dailySpend(txs: readonly InsightTx[]): Map<DateKey, Paise> {
   }
   return map;
 }
+
+/** Categories shown as today's tiles when nothing else has been spent on yet. */
+export const DEFAULT_TILE_CATEGORIES: readonly CategoryId[] = [
+  'food',
+  'transport',
+  'shopping',
+  'bills',
+];
+
+/**
+ * The home screen's category tiles: today's biggest spending categories first, topped up with the
+ * everyday defaults, always exactly `count` tiles.
+ */
+export function categoryTiles(
+  txs: readonly InsightTx[],
+  count = 4,
+): { category: CategoryId; totalPaise: Paise }[] {
+  const spent = totalsByCategory(txs).filter((c) => c.category !== 'uncategorised');
+  const tiles = spent
+    .slice(0, count)
+    .map((c) => ({ category: c.category, totalPaise: c.totalPaise }));
+  for (const id of DEFAULT_TILE_CATEGORIES) {
+    if (tiles.length >= count) break;
+    if (!tiles.some((t) => t.category === id)) tiles.push({ category: id, totalPaise: 0 });
+  }
+  return tiles;
+}

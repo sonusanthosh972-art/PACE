@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { AppLock } from '../AppLock';
 import { useAuthStore } from '@/state/authStore';
@@ -139,5 +140,50 @@ describe('AppLock component', () => {
 
     expect(getByRole('button', { name: 'Unlock with Fingerprint' })).toBeTruthy();
     expect(getByRole('button', { name: 'Use account password' })).toBeTruthy();
+  });
+
+  it('waits for the splash to finish before showing the fingerprint prompt', async () => {
+    const { getByRole, rerender } = await render(
+      <AppLock onboardingComplete={true} canPrompt={false} />,
+    );
+    // The lock is already covering the app under the splash…
+    expect(getByRole('header', { name: 'Paisa Pulse' })).toBeTruthy();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
+    expect(LocalAuthentication.authenticateAsync).not.toHaveBeenCalled();
+
+    // …and prompts once the splash is gone.
+    await rerender(<AppLock onboardingComplete={true} canPrompt={true} />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
+    expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('covers the app as soon as it goes to the background, so returning never shows it', async () => {
+    let onChange: ((s: AppStateStatus) => void) | null = null;
+    const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
+      onChange = handler as (s: AppStateStatus) => void;
+      return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
+    });
+    try {
+      const { getByRole, queryByTestId } = await render(<AppLock onboardingComplete={true} />);
+      await act(async () => {
+        await fireEvent.press(getByRole('button', { name: 'Unlock with Fingerprint' }));
+      });
+      expect(useLockStore.getState().isLocked).toBe(false);
+      expect(queryByTestId('app-lock-cover')).toBeNull();
+
+      await act(async () => onChange?.('background'));
+      expect(queryByTestId('app-lock-cover')).toBeTruthy();
+
+      // Back within the re-lock time: the cover simply goes away.
+      await act(async () => onChange?.('active'));
+      expect(queryByTestId('app-lock-cover')).toBeNull();
+      expect(useLockStore.getState().isLocked).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

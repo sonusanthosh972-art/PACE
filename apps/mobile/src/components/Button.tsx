@@ -17,6 +17,8 @@ interface ButtonProps {
   disabled?: boolean;
   accessibilityHint?: string;
   compact?: boolean;
+  /** Fully rounded ends, for the one main action on a screen. */
+  pill?: boolean;
 }
 
 export function Button({
@@ -28,6 +30,7 @@ export function Button({
   disabled = false,
   accessibilityHint,
   compact = false,
+  pill = false,
 }: ButtonProps) {
   const { colors } = useTheme();
   const inactive = disabled || loading;
@@ -53,6 +56,7 @@ export function Button({
       style={[
         styles.button,
         compact && styles.compact,
+        pill && styles.pill,
         { backgroundColor: palette.bg, borderColor: palette.border, opacity: inactive ? 0.55 : 1 },
       ]}
     >
@@ -80,5 +84,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.xl,
   },
   compact: { minHeight: MIN_TOUCH, paddingHorizontal: SPACE.lg },
+  pill: { borderRadius: RADIUS.pill, minHeight: MIN_TOUCH + SPACE.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
 });
