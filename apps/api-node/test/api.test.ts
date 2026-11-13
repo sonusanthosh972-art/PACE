@@ -11,6 +11,7 @@ import { acquireJobLock, buildSummaryForUser, releaseJobLock, runCatchUp } from 
 import type { DailySummaryDoc, SessionDoc, UserDoc } from '../src/db/models.js';
 import { hashRefreshToken } from '../src/services/auth.js';
 import { setMailTransport, type Mail } from '../src/services/mailer.js';
+import { setGoogleVerifier } from '../src/services/google.js';
 import { addDays, toDateKey } from '../src/domain.js';
 
 const ADMIN_KEY = 'a'.repeat(40);
@@ -246,6 +247,47 @@ describe('auth', () => {
   it('rejects requests without a valid bearer token', async () => {
     assert.equal((await call('GET', '/api/v1/me/profile')).status, 401);
     assert.equal((await call('GET', '/api/v1/me/profile', undefined, { Authorization: 'Bearer nope' })).status, 401);
+  });
+});
+
+describe('Google sign-in', () => {
+  const CLIENT_ID = 'android-client.apps.googleusercontent.com';
+  const fakeJwt = (payload: object) =>
+    ['{"alg":"none"}', JSON.stringify(payload), ''].map((p) => Buffer.from(p).toString('base64url')).join('.');
+
+  before(() => {
+    process.env.GOOGLE_CLIENT_IDS = CLIENT_ID;
+    setGoogleVerifier(async (idToken, audience) => {
+      assert.deepEqual(audience, [CLIENT_ID]);
+      return idToken === 'valid-new' ? { email: 'New.Person@Gmail.com', name: 'New Person' } : null;
+    });
+  });
+  after(() => {
+    delete process.env.GOOGLE_CLIENT_IDS;
+    setGoogleVerifier(null);
+  });
+
+  it('rejects an unsigned token claiming someone else’s email', async () => {
+    const { email } = await register();
+    const res = await call('POST', '/api/v1/auth/google', { idToken: fakeJwt({ email, email_verified: true }) });
+    assert.equal(res.status, 401);
+    assert.equal(res.json.accessToken, undefined);
+  });
+
+  it('creates the account on first sign-in, then signs in to the same one', async () => {
+    const first = await call('POST', '/api/v1/auth/google', { idToken: 'valid-new' });
+    assert.equal(first.status, 201);
+    assert.equal(first.json.user.email, 'new.person@gmail.com');
+    assert.equal(first.json.user.emailVerified, true);
+    const again = await call('POST', '/api/v1/auth/google', { idToken: 'valid-new' });
+    assert.equal(again.status, 200);
+    assert.equal(again.json.user.id, first.json.user.id);
+  });
+
+  it('is disabled until client ids are configured', async () => {
+    delete process.env.GOOGLE_CLIENT_IDS;
+    assert.equal((await call('POST', '/api/v1/auth/google', { idToken: 'valid-new' })).status, 503);
+    process.env.GOOGLE_CLIENT_IDS = CLIENT_ID;
   });
 });
 

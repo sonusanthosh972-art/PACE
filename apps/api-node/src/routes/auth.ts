@@ -15,6 +15,7 @@ import {
   startSession,
   verifyPasswordOrDummy,
 } from '../services/auth.js';
+import { verifyGoogleIdToken } from '../services/google.js';
 import { mailConfigured, sendMail } from '../services/mailer.js';
 import { problem, validationProblem } from '../http.js';
 import { logger } from '../logger.js';
@@ -39,15 +40,17 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-const googleAuthSchema = z.object({
-  idToken: z.string().min(1).max(2048),
-  accessToken: z.string().min(1).max(2048),
+const googleSchema = z.object({
+  idToken: z.string().min(1).max(4096),
 });
 
-const googleRegisterSchema = googleAuthSchema.extend({
-  email,
-  name: z.string().trim().min(1).max(100),
-});
+/** OAuth client ids (Android, iOS, web) whose Google ID tokens this server accepts. */
+function googleClientIds(): string[] {
+  return (process.env.GOOGLE_CLIENT_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1).max(512),
@@ -222,130 +225,73 @@ authRouter.post('/refresh', async (req: Request, res: Response): Promise<void> =
   });
 });
 
-// POST /api/v1/auth/google-login — sign in with Google ID token
-authRouter.post('/google-login', async (req: Request, res: Response): Promise<void> => {
-  const parse = googleAuthSchema.safeParse(req.body);
+// POST /api/v1/auth/google — signs in with a verified Google account, creating it the first time
+authRouter.post('/google', async (req: Request, res: Response): Promise<void> => {
+  const parse = googleSchema.safeParse(req.body);
   if (!parse.success) {
     validationProblem(res, parse.error);
     return;
   }
-
-  try {
-    // Extract email from ID token (basic JWT parsing)
-    const parts = parse.data.idToken.split('.');
-    if (parts.length !== 3) {
-      problem(res, 400, 'Invalid token', 'Invalid ID token format.');
-      return;
-    }
-
-    const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString()) as {
-      email?: string;
-      sub?: string;
-    };
-
-    if (!decoded.email) {
-      problem(res, 400, 'Invalid token', 'No email in ID token.');
-      return;
-    }
-
-    const users = getDb().collection<UserDoc>('users');
-    const normalizedEmail = decoded.email.toLowerCase();
-
-    let user = await users.findOne({ email: normalizedEmail });
-    if (!user) {
-      problem(res, 401, 'Account not found', 'No account with this email. Please create one first.');
-      return;
-    }
-
-    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-      const waitMin = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
-      problem(
-        res,
-        429,
-        'Account temporarily locked',
-        `Too many failed attempts. Try again in ${waitMin} minute${waitMin === 1 ? '' : 's'}.`,
-      );
-      return;
-    }
-
-    if (user.failedLogins || user.lockedUntil) {
-      await users.updateOne({ id: user.id }, { $set: { failedLogins: 0, lockedUntil: null } });
-    }
-
-    const tokens = await startSession(user);
-    res.status(200).json({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: toProfileDto(user),
-    });
-  } catch (err) {
-    logger.error({ err }, '[Auth] Google login failed');
-    problem(res, 500, 'Authentication failed', 'Could not process Google login.');
-  }
-});
-
-// POST /api/v1/auth/google-register — sign up with Google
-authRouter.post('/google-register', async (req: Request, res: Response): Promise<void> => {
-  const parse = googleRegisterSchema.safeParse(req.body);
-  if (!parse.success) {
-    validationProblem(res, parse.error);
+  const audience = googleClientIds();
+  if (audience.length === 0) {
+    problem(res, 503, 'Google sign-in unavailable', 'Google sign-in is not set up on the server yet.');
     return;
   }
 
-  try {
-    // Verify ID token contains email
-    const parts = parse.data.idToken.split('.');
-    if (parts.length !== 3) {
-      problem(res, 400, 'Invalid token', 'Invalid ID token format.');
-      return;
+  const identity = await verifyGoogleIdToken(parse.data.idToken, audience);
+  if (!identity) {
+    problem(res, 401, 'Invalid Google sign-in', 'Google could not confirm this account. Please try again.');
+    return;
+  }
+
+  const users = getDb().collection<UserDoc>('users');
+  const normalizedEmail = identity.email.toLowerCase();
+  const existing = await users.findOne({ email: normalizedEmail });
+  let user: UserDoc;
+  let created = false;
+
+  if (existing) {
+    user = existing;
+    if (!user.emailVerified) {
+      await users.updateOne({ id: user.id }, { $set: { emailVerified: true, updatedAt: new Date() } });
+      user = { ...user, emailVerified: true };
     }
-
-    const users = getDb().collection<UserDoc>('users');
-    const normalizedEmail = parse.data.email.toLowerCase();
-
-    const existing = await users.findOne({ email: normalizedEmail });
-    if (existing) {
-      problem(res, 409, 'Email already registered', 'An account with this email address already exists.');
-      return;
-    }
-
+  } else {
     const now = new Date();
-    const newUser: UserDoc = {
+    user = {
       id: crypto.randomUUID().replace(/-/g, ''),
       email: normalizedEmail,
-      passwordHash: crypto.randomBytes(32).toString('hex'), // Google OAuth, no password needed
-      name: parse.data.name.trim(),
+      // No usable password; "Forgot password" can set one later.
+      passwordHash: await hashPassword(crypto.randomBytes(32).toString('base64url')),
+      name: (identity.name ?? normalizedEmail.split('@')[0] ?? 'User').trim().slice(0, 100),
       salaryPaise: 0,
       payday: 1,
       savingsGoalPaise: 0,
       timezone: 'Asia/Kolkata',
-      emailVerified: true, // Google verifies email
+      emailVerified: true,
       failedLogins: 0,
       lockedUntil: null,
       createdAt: now,
       updatedAt: now,
     };
-
     try {
-      await users.insertOne(newUser);
+      await users.insertOne(user);
+      created = true;
     } catch (err) {
-      if (err instanceof MongoServerError && err.code === 11000) {
-        problem(res, 409, 'Email already registered', 'An account with this email address already exists.');
-        return;
-      }
-      throw err;
+      // Two first sign-ins at once: the other request created the account.
+      if (!(err instanceof MongoServerError && err.code === 11000)) throw err;
+      const winner = await users.findOne({ email: normalizedEmail });
+      if (!winner) throw err;
+      user = winner;
     }
-
-    const tokens = await startSession(newUser);
-    res.status(201).json({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: toProfileDto(newUser),
-    });
-  } catch (err) {
-    logger.error({ err }, '[Auth] Google register failed');
-    problem(res, 500, 'Registration failed', 'Could not process Google registration.');
   }
+
+  const tokens = await startSession(user);
+  res.status(created ? 201 : 200).json({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    user: toProfileDto(user),
+  });
 });
 
 // POST /api/v1/auth/logout — ends this device's session (always 204)

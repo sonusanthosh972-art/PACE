@@ -74,6 +74,11 @@ async function initIndexes(database: Db) {
     { name: 'ix_transactions_userId_category' }
   );
 
+  // Admin dashboard lists sort across all users; without these they scan and sort whole collections.
+  await database.collection('transactions').createIndex({ occurredAt: -1 }, { name: 'ix_transactions_occurredAt' });
+  await database.collection('users').createIndex({ createdAt: -1 }, { name: 'ix_users_createdAt' });
+  await database.collection('dailySummaries').createIndex({ dateKey: -1 }, { name: 'ix_dailySummaries_dateKey' });
+
   // 4. userRules: compound index on (userId, pattern)
   await database.collection('userRules').createIndex(
     { userId: 1, pattern: 1 },

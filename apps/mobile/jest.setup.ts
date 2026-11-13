@@ -9,6 +9,9 @@ try {
   // If Skia mock is unavailable, continue
 }
 
+// The package's "exports" map hides its jest mock, so load it by path.
+require('./node_modules/@react-native-google-signin/google-signin/jest/build/jest/setup');
+
 const mockSecureStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
   isAvailableAsync: jest.fn(async () => true),

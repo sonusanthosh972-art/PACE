@@ -14,7 +14,10 @@
     },
     "android": {
       "package": "com.paisapulse.app",
-      "permissions": ["android.permission.USE_BIOMETRIC", "android.permission.USE_FINGERPRINT"],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0D11",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -42,7 +45,13 @@
         }
       ],
       "expo-asset",
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.895421538943-a1c75joq5c42v5j3ldubc77fblhuskr9"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

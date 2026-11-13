@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { apiClient, ApiError, onAuthExpired, setApiBaseUrl } from '../client';
-import { clearTokens, saveTokens } from '../tokens';
+import { clearTokens, getRefreshToken, saveTokens } from '../tokens';
 
 describe('apiClient', () => {
   const originalFetch = global.fetch;
@@ -144,6 +144,35 @@ describe('apiClient', () => {
       apiClient('/api/v1/protected', {}, z.object({ data: z.string() })),
     ).rejects.toThrow('Session expired. Please sign in again.');
     expect(authExpiredSpy).toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it.each([
+    ['a waking server', { ok: false, status: 503 }],
+    ['a rate limit', { ok: false, status: 429 }],
+    ['no network', null],
+  ])('stays signed in when refresh hits %s', async (_label, refreshResponse) => {
+    await saveTokens('expired-access-token', 'good-refresh-token');
+    const authExpiredSpy = jest.fn();
+    const unsubscribe = onAuthExpired(authExpiredSpy);
+
+    global.fetch = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/api/v1/auth/refresh')) {
+        if (!refreshResponse) throw new TypeError('Network request failed');
+        return { ...refreshResponse, headers: new Headers(), json: async () => ({}) };
+      }
+      return {
+        ok: false,
+        status: 401,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ detail: 'Unauthorized' }),
+      };
+    });
+
+    const error = await apiClient('/api/v1/protected').catch((e: unknown) => e);
+    expect(error).toMatchObject({ statusCode: 0, isNetworkError: true });
+    expect(authExpiredSpy).not.toHaveBeenCalled();
+    expect(await getRefreshToken()).toBe('good-refresh-token');
     unsubscribe();
   });
 

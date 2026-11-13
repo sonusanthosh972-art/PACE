@@ -242,7 +242,7 @@ export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) 
           {user?.email ? (
             <Card style={styles.userCard}>
               <View style={styles.userRow}>
-                <View style={styles.userAvatar}>
+                <View style={[styles.userAvatar, { backgroundColor: colors.accentFill }]}>
                   <Icon name="person" size={18} color="onAccent" />
                 </View>
                 <View style={styles.userMeta}>
@@ -378,7 +378,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#00C853',
     alignItems: 'center',
     justifyContent: 'center',
   },

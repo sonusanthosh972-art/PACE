@@ -26,6 +26,8 @@ import {
 import { restoreFromServer } from '@/services/restore';
 import { syncNow } from '@/services/sync';
 import { getRememberedEmail, rememberEmail } from '@/services/biometrics';
+import { getGoogleIdToken, isGoogleSignInConfigured } from '@/services/google-auth';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore, type SyncState } from '@/state/authStore';
 import { invalidateAll } from '@/state/queries';
 import { SPACE } from '@/theme/tokens';
@@ -67,7 +69,9 @@ export default function AuthScreen() {
     login,
     register,
     logout,
+    signInWithGoogle,
   } = useAuthStore();
+  const { colors } = useTheme();
 
   const params = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<Mode>(params.mode === 'register' ? 'register' : 'login');
@@ -183,29 +187,21 @@ export default function AuthScreen() {
     }
   };
 
-  const onGoogleSignInSuccess = async (
-    idToken: string,
-    _accessToken: string,
-    googleEmail: string,
-    googleName: string,
-  ) => {
+  const onGoogle = async () => {
+    setError(null);
     setBusy(true);
     try {
+      const idToken = await getGoogleIdToken();
+      if (!idToken) return;
       const db = await getAppDb();
-      const { registerWithGoogle, loginWithGoogle } = useAuthStore.getState();
-
-      const googleAuth = {
-        idToken,
-        accessToken: _accessToken,
-        email: googleEmail,
-        name: googleName,
-      };
-
-      const next = await completeAccountFlow(db, mode, () =>
-        mode === 'register' ? registerWithGoogle(googleAuth) : loginWithGoogle(googleAuth),
-      );
-
-      await rememberEmail(googleEmail);
+      let signedInEmail = '';
+      // A brand-new Google account restores nothing and goes on to budget setup.
+      const next = await completeAccountFlow(db, 'login', async () => {
+        const res = await signInWithGoogle(idToken);
+        signedInEmail = res.user.email;
+        return res;
+      });
+      await rememberEmail(signedInEmail);
       await goNext(next);
     } catch (err: unknown) {
       const message =
@@ -335,7 +331,7 @@ export default function AuthScreen() {
         <AppText variant="serifTitle">Account & Backup</AppText>
         <Card style={styles.card}>
           <View style={styles.userRow}>
-            <View style={styles.avatar}>
+            <View style={[styles.avatar, { backgroundColor: colors.accentFill }]}>
               <Icon name="person" size={24} color="onAccent" />
             </View>
             <View style={styles.userMeta}>
@@ -498,20 +494,18 @@ export default function AuthScreen() {
             />
           ) : null}
 
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <AppText variant="caption" color="muted">
-              OR
-            </AppText>
-            <View style={styles.divider} />
-          </View>
-
-          <GoogleSignInButton
-            mode={mode}
-            loading={busy}
-            onSuccess={onGoogleSignInSuccess}
-            onError={(error) => setError(error)}
-          />
+          {isGoogleSignInConfigured() ? (
+            <>
+              <View style={styles.dividerContainer} accessibilityElementsHidden>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <AppText variant="caption" color="muted">
+                  or
+                </AppText>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              </View>
+              <GoogleSignInButton loading={busy} onPress={onGoogle} />
+            </>
+          ) : null}
         </View>
       )}
 
@@ -548,7 +542,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#00C853',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -561,11 +554,7 @@ const styles = StyleSheet.create({
     gap: SPACE.sm,
     marginVertical: SPACE.md,
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
+  divider: { flex: 1, height: StyleSheet.hairlineWidth },
   serverCard: { padding: SPACE.md + 4, gap: SPACE.sm, marginTop: SPACE.xs },
   serverActions: { flexDirection: 'row', gap: SPACE.md, marginTop: SPACE.xs },
   privacyCard: { marginTop: SPACE.lg, padding: SPACE.md + 4, gap: SPACE.md },

@@ -85,10 +85,15 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   _isRetry?: boolean;
 }
 
-// Mutex promise for concurrent token refresh
-let refreshPromise: Promise<string | null> | null = null;
+/** The server could not be reached or was not ready; the session may still be valid. */
+const REFRESH_UNREACHABLE = Symbol('refresh-unreachable');
+type RefreshResult = string | null | typeof REFRESH_UNREACHABLE;
 
-async function refreshAccessToken(): Promise<string | null> {
+// Mutex promise for concurrent token refresh
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+/** New access token, null when the session is over, or REFRESH_UNREACHABLE when offline. */
+async function refreshAccessToken(): Promise<RefreshResult> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
@@ -111,11 +116,14 @@ async function refreshAccessToken(): Promise<string | null> {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
-      if (!response.ok) {
+      // Only the server rejecting the token ends the session; a waking server (502/503) or a
+      // rate limit (429) must not sign the user out.
+      if (response.status === 400 || response.status === 401) {
         await clearTokens();
         notifyAuthExpired();
         return null;
       }
+      if (!response.ok) return REFRESH_UNREACHABLE;
 
       const json: unknown = await response.json();
       const parsed = authResponseSchema.safeParse(json);
@@ -128,7 +136,7 @@ async function refreshAccessToken(): Promise<string | null> {
       await saveTokens(parsed.data.accessToken, parsed.data.refreshToken);
       return parsed.data.accessToken;
     } catch {
-      return null;
+      return REFRESH_UNREACHABLE;
     } finally {
       refreshPromise = null;
     }
@@ -236,8 +244,11 @@ export async function apiClient<T>(
 
   // Handle 401 Unauthorized with token refresh (once per request)
   if (response.status === 401 && !options.skipAuth && !options._isRetry) {
-    const newAccessToken = await refreshAccessToken();
-    if (newAccessToken) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed === REFRESH_UNREACHABLE) {
+      throw new ApiError('Unable to reach server. Please check your connection.', 0, true);
+    }
+    if (refreshed) {
       return apiClient<T>(endpoint, { ...options, _isRetry: true }, schema);
     }
     throw new ApiError('Session expired. Please sign in again.', 401);

@@ -10,7 +10,7 @@ import {
   type UserProfile,
 } from '@/services/api/schemas';
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from '@/services/api/tokens';
-import { type GoogleOAuthResponse } from '@/services/google-auth';
+import { signOutOfGoogle } from '@/services/google-auth';
 
 /** Sign-out never waits long for the server: the phone signs out either way. */
 const LOGOUT_TIMEOUT_MS = 5_000;
@@ -28,9 +28,9 @@ interface AuthState {
 
   init: () => Promise<void>;
   login: (email: string, password: string) => Promise<AuthResponse>;
-  loginWithGoogle: (googleAuth: GoogleOAuthResponse) => Promise<AuthResponse>;
+  /** Signs in with a Google ID token; the server creates the account on first use. */
+  signInWithGoogle: (idToken: string) => Promise<AuthResponse>;
   register: (email: string, password: string, name: string) => Promise<AuthResponse>;
-  registerWithGoogle: (googleAuth: GoogleOAuthResponse) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   /** Emails a reset code if the account exists (the answer is the same either way). */
   requestPasswordReset: (email: string) => Promise<void>;
@@ -175,46 +175,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return res;
   },
 
-  loginWithGoogle: async (googleAuth: GoogleOAuthResponse) => {
+  signInWithGoogle: async (idToken: string) => {
     const res = await apiClient(
-      '/api/v1/auth/google-login',
-      {
-        method: 'POST',
-        body: {
-          idToken: googleAuth.idToken,
-          accessToken: googleAuth.accessToken,
-        },
-        skipAuth: true,
-      },
-      authResponseSchema,
-    );
-
-    await saveTokens(res.accessToken, res.refreshToken);
-    set({ user: res.user, isAuthenticated: true, syncError: null, syncStatus: 'idle' });
-
-    try {
-      const db = await getAppDb();
-      await setSetting(db, 'accountEmail', res.user.email);
-    } catch {
-      // Ignore DB write errors
-    }
-
-    return res;
-  },
-
-  registerWithGoogle: async (googleAuth: GoogleOAuthResponse) => {
-    const res = await apiClient(
-      '/api/v1/auth/google-register',
-      {
-        method: 'POST',
-        body: {
-          idToken: googleAuth.idToken,
-          accessToken: googleAuth.accessToken,
-          name: googleAuth.name,
-          email: googleAuth.email,
-        },
-        skipAuth: true,
-      },
+      '/api/v1/auth/google',
+      { method: 'POST', body: { idToken }, skipAuth: true },
       authResponseSchema,
     );
 
@@ -243,6 +207,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }).catch(() => undefined);
     }
     await clearTokens();
+    await signOutOfGoogle();
     try {
       const db = await getAppDb();
       await setSetting(db, 'accountEmail', null);
