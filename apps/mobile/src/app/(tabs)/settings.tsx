@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, AppState, Platform, StyleSheet, View } from 'react-native';
@@ -8,14 +7,13 @@ import * as SmsReader from '../../../modules/sms-reader';
 import { AppHeader, HeaderBackground, TAB_GUTTER } from '@/components/AppHeader';
 import { AppLogo } from '@/components/AppLogo';
 import { AppText } from '@/components/AppText';
-import { ListRow, RowGroup, SectionTitle, Segmented } from '@/components/Controls';
+import { ListRow, RowGroup, SectionTitle } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
-import type { Settings } from '@/data/settingsRepo';
 import { formatINRWhole, sumPaise } from '@/domain/money';
 import { formatTimeOfDay, ordinal } from '@/lib/format';
 import { getPermissionState, type PermissionState } from '@/lib/permissions';
-import { exportCsv, updateSetting } from '@/services/actions';
+import { exportCsv } from '@/services/actions';
 import {
   authenticateWithBiometrics,
   checkBiometrics,
@@ -23,14 +21,8 @@ import {
   setBiometricEnabled,
 } from '@/services/biometrics';
 import { useAuthStore, type SyncState } from '@/state/authStore';
-import { invalidateAll, useProfile, useSettings } from '@/state/queries';
+import { useProfile, useSettings } from '@/state/queries';
 import { SPACE } from '@/theme/tokens';
-
-const THEMES: { value: Settings['theme']; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
 
 function formatBackupStatus(
   status: SyncState,
@@ -59,7 +51,6 @@ function formatBackupStatus(
 export default function SettingsScreen() {
   const settings = useSettings();
   const profile = useProfile();
-  const client = useQueryClient();
   const [exporting, setExporting] = useState(false);
   const { user, isAuthenticated, syncStatus, lastSyncedAt, nextRetrySeconds } = useAuthStore();
 
@@ -109,7 +100,13 @@ export default function SettingsScreen() {
     };
   }, []);
 
-  const header = <AppHeader title="Settings" subtitle="Your budget, alerts and data." />;
+  const header = (
+    <AppHeader
+      page="settings"
+      title="Your setup"
+      hint="Change your budget, alerts, data and app lock."
+    />
+  );
   const screenProps = {
     background: <HeaderBackground />,
     backgroundScrolls: true,
@@ -120,7 +117,7 @@ export default function SettingsScreen() {
     return (
       <Screen {...screenProps}>
         {header}
-        <LoadingState rows={6} label="Loading settings" />
+        <LoadingState label="Loading settings" />
       </Screen>
     );
   }
@@ -154,7 +151,7 @@ export default function SettingsScreen() {
     <Screen {...screenProps}>
       {header}
 
-      <SectionTitle>Budget</SectionTitle>
+      <SectionTitle icon="wallet-outline">Budget</SectionTitle>
       <RowGroup>
         <ListRow
           icon="cash-outline"
@@ -185,7 +182,7 @@ export default function SettingsScreen() {
         />
       </RowGroup>
 
-      <SectionTitle>Notifications</SectionTitle>
+      <SectionTitle icon="notifications-outline">Notifications</SectionTitle>
       <RowGroup>
         <ListRow
           icon="notifications-outline"
@@ -200,7 +197,7 @@ export default function SettingsScreen() {
         />
       </RowGroup>
 
-      <SectionTitle>Data sources</SectionTitle>
+      <SectionTitle icon="chatbox-ellipses-outline">Data sources</SectionTitle>
       <RowGroup>
         <ListRow
           icon="chatbox-ellipses-outline"
@@ -228,18 +225,7 @@ export default function SettingsScreen() {
         />
       </RowGroup>
 
-      <SectionTitle>Appearance</SectionTitle>
-      <Segmented
-        label="Theme"
-        options={THEMES}
-        value={s.theme}
-        onChange={async (theme) => {
-          await updateSetting('theme', theme);
-          await invalidateAll(client);
-        }}
-      />
-
-      <SectionTitle>Account & security</SectionTitle>
+      <SectionTitle icon="shield-checkmark-outline">Account & security</SectionTitle>
       <RowGroup>
         <ListRow
           icon={isAuthenticated ? 'cloud-done-outline' : 'person-circle-outline'}
@@ -272,7 +258,7 @@ export default function SettingsScreen() {
         ) : null}
       </RowGroup>
 
-      <SectionTitle>Your data</SectionTitle>
+      <SectionTitle icon="folder-open-outline">Your data</SectionTitle>
       <RowGroup>
         {s.demoMode ? (
           <ListRow

@@ -1,28 +1,32 @@
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { useTheme } from '@/theme/ThemeProvider';
-import { RADIUS, SPACE } from '@/theme/tokens';
+import { useRetry } from '@/hooks/useRetry';
+import { MOTION, SPACE } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
+import { PaceLoader } from './PaceLoader';
+import { TransactionSkeletonList, BudgetSkeletonCard } from './Skeleton';
 
-/** Static placeholder blocks (no shimmer: no looping animations), faded in once. */
-export function LoadingState({ rows = 3, label = 'Loading' }: { rows?: number; label?: string }) {
-  const { colors } = useTheme();
+/**
+ * Something is loading: the splash's PACE animation loops until the content arrives, with a quiet
+ * line saying what is on its way. Screen readers hear the label as a progress indicator.
+ */
+export function LoadingState({ label = 'Loading' }: { label?: string }) {
   return (
     <Animated.View
-      entering={FadeIn.duration(250)}
+      entering={FadeIn.duration(MOTION.fadeMs)}
       style={styles.loading}
       accessible
       accessibilityLabel={label}
       accessibilityRole="progressbar"
     >
-      <View style={[styles.blockHero, { backgroundColor: colors.surface }]} />
-      {Array.from({ length: rows }, (_, i) => (
-        <View key={i} style={[styles.block, { backgroundColor: colors.surface }]} />
-      ))}
+      <PaceLoader />
+      <AppText variant="caption" color="muted" center importantForAccessibility="no">
+        {label}…
+      </AppText>
     </Animated.View>
   );
 }
@@ -63,23 +67,43 @@ export function ErrorState({
   body?: string;
   onRetry?: () => void;
 }) {
+  const { retryCount } = useRetry();
+
   return (
     <View accessibilityRole="alert">
       <EmptyState
         icon="alert-circle-outline"
         title={title}
         body={body}
-        actionLabel={onRetry ? 'Try again' : undefined}
+        actionLabel={onRetry ? (retryCount > 0 ? `Retry (${retryCount})` : 'Try again') : undefined}
         onAction={onRetry}
       />
     </View>
   );
 }
 
+export function SkeletonLoader({
+  variant = 'transactions',
+}: {
+  variant?: 'transactions' | 'cards' | 'budget';
+}) {
+  return (
+    <Animated.View entering={FadeIn.duration(MOTION.fadeMs)}>
+      {variant === 'transactions' && <TransactionSkeletonList />}
+      {variant === 'cards' && <TransactionSkeletonList />}
+      {variant === 'budget' && <BudgetSkeletonCard />}
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
-  loading: { gap: SPACE.md, paddingTop: SPACE.lg },
-  blockHero: { height: 220, borderRadius: RADIUS.lg },
-  block: { height: 64, borderRadius: RADIUS.md },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACE.md,
+    minHeight: 240,
+    paddingVertical: SPACE.xxl,
+  },
   message: {
     alignItems: 'center',
     gap: SPACE.md,

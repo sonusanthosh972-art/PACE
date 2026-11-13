@@ -30,7 +30,7 @@ export default function TransactionSheet() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       {tx.isPending ? (
-        <LoadingState rows={2} label="Loading transaction" />
+        <LoadingState label="Loading transaction" />
       ) : tx.isError || !tx.data ? (
         <ErrorState
           title="Transaction not found"
@@ -77,7 +77,7 @@ function Details({ tx }: { tx: Transaction }) {
     <View style={styles.stack}>
       <View style={styles.hero}>
         <AppText color="muted">{credit ? 'Received from' : 'Paid to'}</AppText>
-        <AppText variant="title" center numberOfLines={2}>
+        <AppText variant="serifTitle" center numberOfLines={2}>
           {txTitle(tx)}
         </AppText>
         <Amount

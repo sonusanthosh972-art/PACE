@@ -51,7 +51,7 @@ export default function ExitSample() {
       <View style={styles.icon}>
         <Icon name="flask-outline" size={40} color="amberText" />
       </View>
-      <AppText variant="title" center>
+      <AppText variant="serifTitle" center>
         Switch to your real data
       </AppText>
       <AppText color="muted">

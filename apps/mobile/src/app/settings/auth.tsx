@@ -6,6 +6,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { AccountSecurity } from '@/components/account/AccountSecurity';
 import { ForgotPasswordForm } from '@/components/account/ForgotPasswordForm';
 import { Card } from '@/components/Card';
@@ -182,6 +183,39 @@ export default function AuthScreen() {
     }
   };
 
+  const onGoogleSignInSuccess = async (
+    idToken: string,
+    _accessToken: string,
+    googleEmail: string,
+    googleName: string,
+  ) => {
+    setBusy(true);
+    try {
+      const db = await getAppDb();
+      const { registerWithGoogle, loginWithGoogle } = useAuthStore.getState();
+
+      const googleAuth = {
+        idToken,
+        accessToken: _accessToken,
+        email: googleEmail,
+        name: googleName,
+      };
+
+      const next = await completeAccountFlow(db, mode, () =>
+        mode === 'register' ? registerWithGoogle(googleAuth) : loginWithGoogle(googleAuth),
+      );
+
+      await rememberEmail(googleEmail);
+      await goNext(next);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Google sign-in failed. Please try again.';
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onManualSync = async () => {
     setBusy(true);
     try {
@@ -298,7 +332,7 @@ export default function AuthScreen() {
   if (isAuthenticated && user) {
     return (
       <Screen>
-        <AppText variant="title">Account & Backup</AppText>
+        <AppText variant="serifTitle">Account & Backup</AppText>
         <Card style={styles.card}>
           <View style={styles.userRow}>
             <View style={styles.avatar}>
@@ -368,7 +402,7 @@ export default function AuthScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Account & Backup</AppText>
+      <AppText variant="serifTitle">Account & Backup</AppText>
       <AppText color="muted">
         {mode === 'register'
           ? 'Create your account. Next you set up your budget and allow bank SMS, so everything you see is your real spending.'
@@ -463,6 +497,21 @@ export default function AuthScreen() {
               }}
             />
           ) : null}
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <AppText variant="caption" color="muted">
+              OR
+            </AppText>
+            <View style={styles.divider} />
+          </View>
+
+          <GoogleSignInButton
+            mode={mode}
+            loading={busy}
+            onSuccess={onGoogleSignInSuccess}
+            onError={(error) => setError(error)}
+          />
         </View>
       )}
 
@@ -506,6 +555,17 @@ const styles = StyleSheet.create({
   userMeta: { flex: 1, gap: 2 },
   group: { gap: SPACE.sm },
   form: { gap: SPACE.md, marginTop: SPACE.sm },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginVertical: SPACE.md,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
   serverCard: { padding: SPACE.md + 4, gap: SPACE.sm, marginTop: SPACE.xs },
   serverActions: { flexDirection: 'row', gap: SPACE.md, marginTop: SPACE.xs },
   privacyCard: { marginTop: SPACE.lg, padding: SPACE.md + 4, gap: SPACE.md },

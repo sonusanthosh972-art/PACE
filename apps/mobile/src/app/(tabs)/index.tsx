@@ -11,7 +11,9 @@ import { BudgetRing } from '@/components/BudgetRing';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Icon, type IconName } from '@/components/Icon';
+import { PaceLoader } from '@/components/PaceLoader';
 import { PressableScale } from '@/components/PressableScale';
+import { Reveal } from '@/components/Reveal';
 import { Screen } from '@/components/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { TransactionRow } from '@/components/TransactionRow';
@@ -73,8 +75,9 @@ export default function TodayScreen() {
       }
     >
       <AppHeader
+        page="index"
         title={`${getGreetingTitle(timeOfDay, userName)} 👋`}
-        subtitle="A calm way to keep your money on track."
+        hint="See what's safe to spend today, and add cash in one tap."
       />
       {today.isPending ? (
         <LoadingState label="Loading today's budget" />
@@ -118,19 +121,28 @@ function TodayContent({
 
   return (
     <>
-      <HeroCard snapshot={snapshot} tone={tone} />
-      <StatusCard tone={tone} title={status.title} body={status.body} />
+      <Reveal order={0}>
+        <HeroCard snapshot={snapshot} tone={tone} />
+      </Reveal>
+      <Reveal order={1}>
+        <StatusCard tone={tone} title={status.title} body={status.body} />
+      </Reveal>
       {demoMode ? <SampleDataBanner /> : null}
       {importing ? (
-        <Card>
+        <Card accessibilityLabel="Reading your bank SMS. This takes a few seconds.">
+          <PaceLoader size="sm" />
           <AppText variant="bodyStrong">Reading your bank SMS…</AppText>
           <AppText color="muted">
             Importing the last 90 days from bank senders only. This takes a few seconds.
           </AppText>
         </Card>
       ) : null}
-      <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
-      <MonthGlance snapshot={snapshot} />
+      <Reveal order={2}>
+        <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
+      </Reveal>
+      <Reveal order={3}>
+        <MonthGlance snapshot={snapshot} />
+      </Reveal>
     </>
   );
 }
@@ -324,7 +336,7 @@ function TodaySpending({
   transactions: Transaction[];
   spentPaise: number;
 }) {
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const tiles = categoryTiles(
     transactions.map((t) => ({ ...t, merchantDisplay: displayMerchant(t.merchant, t.vpa) })),
@@ -337,7 +349,7 @@ function TodaySpending({
   ];
 
   return (
-    <View style={[styles.section, scheme === 'light' && styles.sectionDaylight]}>
+    <View style={styles.section}>
       <View style={styles.sectionHead}>
         <AppText variant="heading" accessibilityRole="header">
           Today&apos;s spending
@@ -527,8 +539,6 @@ const styles = StyleSheet.create({
   },
 
   section: { gap: SPACE.md, marginTop: SPACE.xs },
-  // On the pale page the section needs a little more air to separate from the cards above.
-  sectionDaylight: { marginTop: SPACE.md },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',

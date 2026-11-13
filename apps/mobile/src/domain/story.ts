@@ -7,7 +7,20 @@ import { dailySpend, totalsByCategory, type CategoryTotal, type InsightTx } from
 import { formatINRWhole, type Paise } from './money';
 import { parseDateKey, toDateKey, type DateKey } from './time';
 
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 const MONTHS_LONG = [
   'January',
   'February',
@@ -61,7 +74,13 @@ export function breakdown(byCategory: readonly CategoryTotal[], max = 4): Breakd
   }));
   if (rest.length > 0) {
     const others = rest.reduce((s, c) => s + c.totalPaise, 0);
-    rows.push({ key: 'others', category: null, label: 'Others', totalPaise: others, pct: pct(others) });
+    rows.push({
+      key: 'others',
+      category: null,
+      label: 'Others',
+      totalPaise: others,
+      pct: pct(others),
+    });
   }
   return rows;
 }

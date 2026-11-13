@@ -47,7 +47,7 @@ export default function AddSheet() {
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.sheetHeader}>
-        <AppText variant="title" accessibilityRole="header">
+        <AppText variant="serifTitle" accessibilityRole="header">
           Record cash spending
         </AppText>
         <AppText variant="caption" color="muted">

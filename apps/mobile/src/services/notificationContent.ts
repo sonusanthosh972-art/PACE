@@ -60,10 +60,11 @@ export function warn80Body(spentPaise: Paise, budgetPaise: Paise): string {
 
 export function warn100Body(spentPaise: Paise, budgetPaise: Paise): string {
   const over = spentPaise - budgetPaise;
+  // The allowance is fixed, so tomorrow is never smaller because of today: say so, calmly.
   if (over > 0) {
-    return `Today's budget is spent. You're ${formatINRWhole(over)} over — tomorrow's budget will adjust.`;
+    return `You're ${formatINRWhole(over)} over today's budget. Tomorrow starts fresh with your usual ${formatINRWhole(budgetPaise)}.`;
   }
-  return `Today's budget is fully used. Any more spending puts tomorrow under pressure.`;
+  return `Today's budget is fully used. Tomorrow starts fresh with your usual ${formatINRWhole(budgetPaise)}.`;
 }
 
 // ── Night summary ────────────────────────────────────────────────────────────

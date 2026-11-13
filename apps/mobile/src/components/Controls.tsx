@@ -4,7 +4,7 @@ import { StyleSheet, Switch, View, type StyleProp, type ViewStyle } from 'react-
 
 import { ordinal } from '@/lib/format';
 import { useTheme } from '@/theme/ThemeProvider';
-import { MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
+import { ICON, MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 import { Icon, type IconName } from './Icon';
@@ -141,7 +141,14 @@ export function ListRow({
         ) : null}
       </View>
       {value ? (
-        <AppText color="muted" tabular numberOfLines={1} style={styles.listValue}>
+        <AppText
+          color="muted"
+          tabular
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={styles.listValue}
+        >
           {value}
         </AppText>
       ) : null}
@@ -203,11 +210,15 @@ export function RowGroup({ children }: { children: ReactNode }) {
   );
 }
 
-export function SectionTitle({ children }: { children: string }) {
+/** A section heading; the optional icon makes sections easy to tell apart while scrolling. */
+export function SectionTitle({ children, icon }: { children: string; icon?: IconName }) {
   return (
-    <AppText variant="overline" color="muted" accessibilityRole="header" style={styles.section}>
-      {children}
-    </AppText>
+    <View style={[styles.sectionRow, styles.section]}>
+      {icon ? <Icon name={icon} size={ICON.sm} color="accentText" /> : null}
+      <AppText variant="overline" color="muted" accessibilityRole="header">
+        {children}
+      </AppText>
+    </View>
   );
 }
 
@@ -242,7 +253,7 @@ export function StepHeader({
       <AppText variant="caption" color="muted">
         Step {step} of {total}
       </AppText>
-      <AppText variant="title" accessibilityRole="header">
+      <AppText variant="serifTitle" accessibilityRole="header">
         {title}
       </AppText>
       {body ? <AppText color="muted">{body}</AppText> : null}
@@ -287,8 +298,9 @@ const styles = StyleSheet.create({
     marginLeft: 22 + SPACE.md,
   },
   listMiddle: { flex: 1, gap: 2 },
-  listValue: { maxWidth: '40%' },
+  listValue: { maxWidth: '45%' },
   section: { marginTop: SPACE.lg, marginBottom: -SPACE.xs },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   stepHeader: { gap: SPACE.sm, marginBottom: SPACE.md },
   dots: { flexDirection: 'row', gap: 6, marginBottom: SPACE.sm },
   dot: { height: 6, borderRadius: 3 },

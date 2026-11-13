@@ -1,7 +1,8 @@
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
-import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display/700Bold';
+import { PlayfairDisplay_600SemiBold } from '@expo-google-fonts/playfair-display/600SemiBold';
 import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
@@ -14,7 +15,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppLock } from '@/components/AppLock';
 import { DeviceSync } from '@/components/DeviceSync';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { NetworkBanner } from '@/components/NetworkBanner';
 import { SplashScreenView } from '@/components/SplashScreenView';
+import { ToastContainer } from '@/components/Toast';
 import { ErrorState } from '@/components/States';
 import { useSplash } from '@/state/splashStore';
 import { useSettings } from '@/state/queries';
@@ -32,13 +36,17 @@ export default function RootLayout() {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
-    Inter_700Bold,
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_600SemiBold,
   });
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <AppShell fontsReady={fontsLoaded || fontError !== null} />
+          <ErrorBoundary>
+            <AppShell fontsReady={fontsLoaded || fontError !== null} />
+            <ToastContainer />
+          </ErrorBoundary>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -57,7 +65,7 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
   }, []);
 
   return (
-    <ThemeProvider preference={settings.data?.theme ?? 'system'}>
+    <ThemeProvider>
       {settings.isError ? (
         <StartupError onRetry={() => settings.refetch()} />
       ) : (
@@ -92,15 +100,17 @@ function StartupError({ onRetry }: { onRetry: () => void }) {
 }
 
 function ThemedStack() {
-  const { colors, scheme, reducedMotion } = useTheme();
+  const { colors, reducedMotion } = useTheme();
   return (
     <>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <NetworkBanner />
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.bg },
-          animation: reducedMotion ? 'fade' : 'fade_from_bottom',
+          // Going deeper (a settings page, the review list) slides in from the right.
+          animation: reducedMotion ? 'fade' : 'slide_from_right',
           animationDuration: MOTION.screenMs,
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
@@ -108,8 +118,8 @@ function ThemedStack() {
           headerShadowVisible: false,
         }}
       >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" options={{ animation: 'fade' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
         <Stack.Screen name="onboarding" />
         <Stack.Screen
           name="add"

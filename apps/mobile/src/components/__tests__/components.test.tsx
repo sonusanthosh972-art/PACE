@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { Transaction } from '@/domain/transaction';
-import { resolveScheme } from '@/theme/ThemeProvider';
 
 import { Chip } from '../Chip';
 import { MoneyField } from '../Fields';
@@ -83,14 +82,5 @@ describe('Chip', () => {
   it('shows no check mark when not selected', async () => {
     await render(<Chip label="UPI" selected={false} onPress={jest.fn()} />);
     expect(screen.queryByTestId('chip-check')).toBeNull();
-  });
-});
-
-describe('theme', () => {
-  it('follows the system by default (dark when unknown) and honours the override', () => {
-    expect(resolveScheme('system', 'light')).toBe('light');
-    expect(resolveScheme('system', null)).toBe('dark');
-    expect(resolveScheme('dark', 'light')).toBe('dark');
-    expect(resolveScheme('light', 'dark')).toBe('light');
   });
 });

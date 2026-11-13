@@ -63,7 +63,7 @@ export default function DeleteData() {
       <View style={styles.icon}>
         <Icon name="warning-outline" size={40} color="coralText" />
       </View>
-      <AppText variant="title" center>
+      <AppText variant="serifTitle" center>
         This cannot be undone
       </AppText>
       <AppText color="muted">This permanently deletes:</AppText>

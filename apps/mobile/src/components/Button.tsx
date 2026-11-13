@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 import { Icon, type IconName } from './Icon';
+import { PaceLoader } from './PaceLoader';
 import { PressableScale } from './PressableScale';
 
 interface ButtonProps {
@@ -61,7 +62,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors[palette.fg]} />
+        <PaceLoader size="sm" color={colors[palette.fg]} />
       ) : (
         <View style={styles.row}>
           {icon ? <Icon name={icon} size={20} color={palette.fg} /> : null}

@@ -38,7 +38,7 @@ export function BudgetPreview({ profile }: { profile: BudgetProfile }) {
             That leaves you
           </AppText>
           <AppText
-            variant="title"
+            variant="serifTitle"
             tabular
             numberOfLines={1}
             adjustsFontSizeToFit

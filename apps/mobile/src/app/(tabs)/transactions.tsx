@@ -103,7 +103,11 @@ export default function TransactionsScreen() {
   // behind them follows the same scroll.
   const header = (
     <View style={styles.top}>
-      <AppHeader title="Transactions" subtitle="Swipe a payment left to tag it or leave it out." />
+      <AppHeader
+        page="transactions"
+        title="Your payments"
+        hint="Search, filter, or swipe a payment left to tag it."
+      />
       {/* 1. Integrated Search Bar */}
       <View
         style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -233,7 +237,7 @@ export default function TransactionsScreen() {
   );
 
   const emptyState = txs.isPending ? (
-    <LoadingState rows={6} label="Loading transactions" />
+    <LoadingState label="Loading transactions" />
   ) : txs.isError ? (
     <ErrorState onRetry={() => txs.refetch()} />
   ) : (

@@ -108,7 +108,7 @@ export default function ReviewScreen() {
       ) : null}
 
       {queue.isPending ? (
-        <LoadingState rows={4} label="Loading payments to review" />
+        <LoadingState label="Loading payments to review" />
       ) : queue.isError ? (
         <ErrorState onRetry={() => queue.refetch()} />
       ) : queue.data.items.length === 0 ? (

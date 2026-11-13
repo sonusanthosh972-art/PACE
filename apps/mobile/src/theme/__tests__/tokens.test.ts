@@ -1,9 +1,7 @@
-import { contrastRatio, PALETTES, type ColorScheme } from '../tokens';
+import { COLORS, contrastRatio } from '../tokens';
 
-const SCHEMES: ColorScheme[] = ['dark', 'light'];
-
-describe.each(SCHEMES)('%s palette', (scheme) => {
-  const p = PALETTES[scheme];
+describe('palette', () => {
+  const p = COLORS;
   const backgrounds = { bg: p.bg, surface: p.surface, elevated: p.elevated };
   const textTokens = {
     text: p.text,
@@ -41,7 +39,7 @@ describe('brand & splash colours', () => {
 });
 
 it('uses the specified base colours', () => {
-  expect(PALETTES.dark).toMatchObject({
+  expect(COLORS).toMatchObject({
     bg: '#16171A',
     surface: '#1F2125',
     elevated: '#282B30',
@@ -50,16 +48,5 @@ it('uses the specified base colours', () => {
     accent: '#7BC6A4',
     amber: '#E3B169',
     coral: '#E08A7A',
-  });
-  expect(PALETTES.light).toMatchObject({
-    bg: '#F7F8F5',
-    surface: '#F1F3EF',
-    text: '#24262A',
-    muted: '#6B6A66',
-    accent: '#72CFA9',
-    accentFill: '#72CFA9',
-    onAccent: '#16171A',
-    amber: '#B07C2A',
-    coral: '#B85A4A',
   });
 });

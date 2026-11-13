@@ -111,9 +111,16 @@ describe('notificationContent', () => {
       expect(body).toContain('₹200 over');
     });
 
-    it('warns about tomorrow when exactly at budget', () => {
+    it('says when the budget is exactly used up', () => {
       const body = warn100Body(1_500_00, 1_500_00);
       expect(body).toContain('fully used');
+    });
+
+    it('never says tomorrow shrinks: the daily allowance is fixed', () => {
+      for (const body of [warn100Body(1_700_00, 1_500_00), warn100Body(1_500_00, 1_500_00)]) {
+        expect(body).toContain('Tomorrow starts fresh with your usual ₹1,500');
+        expect(body).not.toMatch(/adjust|pressure/);
+      }
     });
   });
 

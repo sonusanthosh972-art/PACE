@@ -66,7 +66,10 @@ export function DonutChart({
 
   const summary = slices
     .slice(0, 4)
-    .map((s) => `${s.category ? CATEGORIES[s.category].label : 'Others'} ${formatINRWhole(s.totalPaise)}`)
+    .map(
+      (s) =>
+        `${s.category ? CATEGORIES[s.category].label : 'Others'} ${formatINRWhole(s.totalPaise)}`,
+    )
     .join(', ');
 
   return (

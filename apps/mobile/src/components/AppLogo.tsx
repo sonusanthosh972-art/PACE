@@ -50,8 +50,9 @@ export function AppLogo({
   tagline,
   tone = 'auto',
 }: AppLogoProps) {
-  const { scheme, reducedMotion } = useTheme();
-  const isDark = tone === 'auto' ? scheme === 'dark' : tone === 'dark';
+  const { reducedMotion } = useTheme();
+  // The app is dark only, so 'auto' means dark.
+  const isDark = tone !== 'light';
 
   // Mark bounding box in SVG space (minX 452, minY 186, width 102, height 136)
   const svgWidth = 102;

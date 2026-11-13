@@ -1,9 +1,14 @@
-import type { InsightTx } from '../insights';
-import { buildStory, compareWeeks, weekStart, type StoryInput, type StoryLine } from '../story';
+import type { CategoryTotal, InsightTx } from '../insights';
+import {
+  biggestDay,
+  breakdown,
+  buildPatterns,
+  cycleLabel,
+  cycleMonthName,
+  quietWin,
+  type PatternInput,
+} from '../story';
 import { atTimeMs, type DateKey } from '../time';
-
-// 2026-11-05 is a Thursday; that week starts Monday 2026-11-02.
-const TODAY: DateKey = '2026-11-05';
 
 const tx = (date: DateKey, amountPaise: number, p: Partial<InsightTx> = {}): InsightTx => ({
   amountPaise,
@@ -16,134 +21,158 @@ const tx = (date: DateKey, amountPaise: number, p: Partial<InsightTx> = {}): Ins
   ...p,
 });
 
-const text = (line: StoryLine | undefined) =>
-  line?.parts.map((p) => (typeof p === 'string' ? p : p.strong)).join('') ?? '';
+const cat = (
+  category: CategoryTotal['category'],
+  totalPaise: number,
+  count = 1,
+): CategoryTotal => ({
+  category,
+  totalPaise,
+  count,
+});
 
-const base: StoryInput = {
-  today: TODAY,
-  week: { thisWeekPaise: 0, lastWeekPaise: 0, daysSoFar: 4, topCategory: null },
-  cycleTopCategory: null,
-  days: [],
-  leaks: { count: 0, totalPaise: 0 },
-  split: { essentialPaise: 0, nonEssentialPaise: 0 },
-};
-
-describe('weekStart', () => {
-  it('starts weeks on Monday', () => {
-    expect(weekStart('2026-11-02')).toBe('2026-11-02'); // Monday
-    expect(weekStart(TODAY)).toBe('2026-11-02'); // Thursday
-    expect(weekStart('2026-11-08')).toBe('2026-11-02'); // Sunday
+describe('cycle names', () => {
+  it('names a cycle after the month it starts in', () => {
+    expect(cycleLabel('2026-11-01')).toBe('Nov 2026');
+    expect(cycleLabel('2026-10-25')).toBe('Oct 2026');
+    expect(cycleMonthName('2026-10-01')).toBe('October');
   });
 });
 
-describe('compareWeeks', () => {
-  it('compares Monday→today with the same weekdays last week', () => {
-    const txs = [
-      tx('2026-11-02', 300_00, { category: 'transport' }),
-      tx('2026-11-05', 200_00, { category: 'food' }),
-      tx('2026-11-05', 150_00, { category: 'food' }),
-      // Last week, Mon–Thu: counted.
-      tx('2026-10-26', 500_00),
-      tx('2026-10-29', 400_00),
-      // Last Friday is after "the same point" last week: not counted.
-      tx('2026-10-30', 9_999_00),
-      // Excluded payments never count.
-      tx('2026-11-03', 5_000_00, { isExcluded: true }),
-    ];
-    expect(compareWeeks(txs, TODAY)).toEqual({
-      thisWeekPaise: 650_00,
-      lastWeekPaise: 900_00,
-      daysSoFar: 4,
-      topCategory: 'food',
-    });
+describe('breakdown', () => {
+  it('shows the top four and combines the rest as Others', () => {
+    const rows = breakdown([
+      cat('food', 2_140_00),
+      cat('transport', 1_320_00),
+      cat('shopping', 1_080_00),
+      cat('bills', 890_00),
+      cat('health', 600_00),
+      cat('coffee', 400_00),
+    ]);
+    expect(rows.map((r) => r.label)).toEqual(['Food', 'Transport', 'Shopping', 'Bills', 'Others']);
+    expect(rows[4]).toMatchObject({ category: null, totalPaise: 1_000_00 });
+    expect(rows[0]?.pct).toBe(33);
   });
 
-  it('has no top category for a week without spending', () => {
-    expect(compareWeeks([tx('2026-10-27', 100_00)], TODAY).topCategory).toBeNull();
+  it('never makes an "Others" row out of a single category', () => {
+    const rows = breakdown([
+      cat('food', 500_00),
+      cat('transport', 400_00),
+      cat('shopping', 300_00),
+      cat('bills', 200_00),
+      cat('health', 100_00),
+    ]);
+    expect(rows.map((r) => r.label)).toEqual(['Food', 'Transport', 'Shopping', 'Bills', 'Health']);
+  });
+
+  it('is empty when nothing was spent', () => {
+    expect(breakdown([])).toEqual([]);
   });
 });
 
-describe('buildStory', () => {
-  it('says nothing when there is nothing to say', () => {
-    expect(buildStory(base)).toEqual([]);
+describe('buildPatterns', () => {
+  const base: PatternInput = {
+    byCategory: [cat('food', 2_140_00), cat('transport', 1_320_00), cat('shopping', 460_00)],
+    totalSpentPaise: 8_420_00,
+    days: [
+      { date: '2026-11-01', spentPaise: 500_00, budgetPaise: 1_000_00 },
+      { date: '2026-11-02', spentPaise: 900_00, budgetPaise: 1_000_00 },
+      { date: '2026-11-03', spentPaise: 2_000_00, budgetPaise: 1_000_00 }, // today, still going
+    ],
+    lastFinishedDay: '2026-11-02',
+    previousPaise: 0,
+    previousStart: '2026-10-01',
+    inProgress: true,
+  };
+
+  it('names the biggest category with its share', () => {
+    const top = buildPatterns(base).find((p) => p.id === 'top');
+    expect(top?.title).toBe('Food was your biggest expense this cycle.');
+    expect(top?.detail).toBe(
+      `₹2,140 · ${Math.round((2_140_00 / 3_920_00) * 100)}% of total spending`,
+    );
   });
 
-  it('names the biggest category of the week, falling back to the cycle', () => {
-    const week = buildStory({ ...base, week: { ...base.week, topCategory: 'food' } });
-    expect(text(week[0])).toBe('Food & Dining has been your biggest expense this week.');
-    const cycle = buildStory({ ...base, cycleTopCategory: 'transport' });
-    expect(text(cycle[0])).toBe('Transport has been your biggest expense this cycle.');
-  });
+  it('says "On track" only when every finished day stayed within the allowance', () => {
+    const allowance = buildPatterns(base).find((p) => p.id === 'allowance');
+    expect(allowance?.title).toBe("You're staying within your daily allowance.");
+    expect(allowance?.badge).toBe('On track');
+    expect(allowance?.detail).toBe('About ₹2,807 per day');
 
-  it('describes the week-on-week change in rupees, without judgement', () => {
-    const less = buildStory({
+    const mostlyOver = buildPatterns({
       ...base,
-      week: { ...base.week, thisWeekPaise: 2_700_00, lastWeekPaise: 3_000_00 },
-    });
-    expect(text(less.find((l) => l.id === 'week'))).toBe(
-      "You've spent ₹300 less than this point last week.",
-    );
+      days: base.days.map((d) => ({ ...d, spentPaise: 5_000_00 })),
+    }).find((p) => p.id === 'allowance');
+    expect(mostlyOver?.badge).toBeUndefined();
+    expect(mostlyOver?.title).toBe('Some days ran above your allowance.');
+    expect(mostlyOver?.detail).toContain('each new day starts fresh');
+  });
 
-    const more = buildStory({
+  it('compares with the same stretch of last cycle, gently', () => {
+    const less = buildPatterns({ ...base, previousPaise: 9_570_00 }).find(
+      (p) => p.id === 'compare',
+    );
+    expect(less?.title).toBe('You spent 12% less than at this point last cycle.');
+    expect(less?.detail).toBe('₹1,150 lower than October');
+
+    const more = buildPatterns({ ...base, previousPaise: 7_000_00, inProgress: false }).find(
+      (p) => p.id === 'compare',
+    );
+    expect(more?.title).toBe('You spent 20% more than last cycle.');
+    expect(more?.tone).toBe('amber');
+    expect(`${more?.title} ${more?.detail}`).not.toMatch(/overspent|bad|fail/i);
+  });
+
+  it('leaves out what it cannot say honestly', () => {
+    const patterns = buildPatterns({
       ...base,
-      week: { ...base.week, thisWeekPaise: 3_500_00, lastWeekPaise: 3_000_00 },
+      byCategory: [],
+      totalSpentPaise: 0,
+      days: [{ date: '2026-11-01', spentPaise: 0, budgetPaise: 1_000_00 }],
+      lastFinishedDay: '2026-10-31',
     });
-    const line = text(more.find((l) => l.id === 'week'));
-    expect(line).toContain('₹500 more than this point last week.');
-    expect(line).not.toMatch(/overspent|bad|fail/i);
+    expect(patterns).toEqual([]);
   });
+});
 
-  it('calls small differences "about the same" and says "last week" on Sunday', () => {
-    const lines = buildStory({
-      ...base,
-      week: { ...base.week, daysSoFar: 7, thisWeekPaise: 3_050_00, lastWeekPaise: 3_000_00 },
+describe('biggestDay', () => {
+  it('finds the day with the most spending and its top categories', () => {
+    const day = biggestDay([
+      tx('2026-11-02', 300_00),
+      tx('2026-11-14', 700_00, { category: 'food' }),
+      tx('2026-11-14', 340_00, { category: 'shopping' }),
+      tx('2026-11-14', 200_00, { category: 'transport' }),
+      tx('2026-11-14', 100_00, { category: 'health' }),
+    ]);
+    expect(day).toEqual({
+      date: '2026-11-14',
+      totalPaise: 1_340_00,
+      categories: ['food', 'shopping', 'transport'],
     });
-    expect(text(lines.find((l) => l.id === 'week'))).toBe(
-      "You're spending about the same as last week.",
-    );
   });
 
-  it('skips the comparison when either week is empty', () => {
-    const lines = buildStory({ ...base, week: { ...base.week, thisWeekPaise: 100_00 } });
-    expect(lines.find((l) => l.id === 'week')).toBeUndefined();
+  it('is null with no spending', () => {
+    expect(biggestDay([])).toBeNull();
+  });
+});
+
+describe('quietWin', () => {
+  it('celebrates the biggest drop against last cycle', () => {
+    expect(
+      quietWin({
+        current: [cat('transport', 900_00), cat('food', 2_000_00)],
+        previous: [cat('transport', 1_320_00), cat('food', 2_100_00)],
+        daysWithin: 3,
+      }),
+    ).toEqual({ before: 'You spent ', strong: '₹420', after: ' less on transport this cycle.' });
   });
 
-  it('counts finished days within the allowance, ignoring today and pre-budget days', () => {
-    const days = [
-      { date: '2026-11-01', spentPaise: 5_000_00, budgetPaise: null }, // before budgeting
-      { date: '2026-11-02', spentPaise: 800_00, budgetPaise: 1_000_00 },
-      { date: '2026-11-03', spentPaise: 1_200_00, budgetPaise: 1_000_00 },
-      { date: '2026-11-04', spentPaise: 1_000_00, budgetPaise: 1_000_00 },
-      { date: TODAY, spentPaise: 9_000_00, budgetPaise: 1_000_00 }, // still going
-    ];
-    expect(text(buildStory({ ...base, days }).find((l) => l.id === 'allowance'))).toBe(
-      '2 of 3 days stayed within your daily allowance.',
-    );
-
-    const allGood = days.map((d) => ({ ...d, spentPaise: 0 }));
-    expect(text(buildStory({ ...base, days: allGood }).find((l) => l.id === 'allowance'))).toBe(
-      'Every day so far has stayed within your daily allowance.',
-    );
-
-    const mostlyOver = days.map((d) => ({ ...d, spentPaise: 2_000_00 }));
-    const gentle = text(
-      buildStory({ ...base, days: mostlyOver }).find((l) => l.id === 'allowance'),
-    );
-    expect(gentle).toContain('0 of 3 days');
-    expect(gentle).toContain('Each new day starts fresh.');
-  });
-
-  it('describes small payments and the essentials split', () => {
-    const lines = buildStory({
-      ...base,
-      leaks: { count: 1, totalPaise: 120_00 },
-      split: { essentialPaise: 300_00, nonEssentialPaise: 700_00 },
+  it('falls back to days within the allowance, and stays quiet otherwise', () => {
+    expect(quietWin({ current: [], previous: [], daysWithin: 5 })).toEqual({
+      before: '',
+      strong: '5 days',
+      after: ' stayed within your daily allowance.',
     });
-    expect(text(lines.find((l) => l.id === 'small'))).toBe(
-      '₹120 went on 1 small payment under ₹500.',
-    );
-    expect(text(lines.find((l) => l.id === 'split'))).toBe(
-      '70% of your spending went on extras, the rest on essentials.',
-    );
+    expect(quietWin({ current: [], previous: [], daysWithin: 0 })).toBeNull();
   });
 });

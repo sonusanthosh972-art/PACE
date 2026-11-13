@@ -494,13 +494,20 @@ describe('budget start date repair', () => {
 describe('settings', () => {
   it('returns defaults, persists values and ignores corrupt rows', async () => {
     expect(await getSettings(db)).toEqual(DEFAULT_SETTINGS);
-    await setSetting(db, 'theme', 'dark');
+    await setSetting(db, 'demoMode', true);
     await setSetting(db, 'morningTime', { hour: 7, minute: 30 });
     await db.runAsync(`INSERT INTO settings (key, value) VALUES ('nightTime', '{not json')`, []);
     const s = await getSettings(db);
-    expect(s.theme).toBe('dark');
+    expect(s.demoMode).toBe(true);
     expect(s.morningTime).toEqual({ hour: 7, minute: 30 });
     expect(s.nightTime).toEqual({ hour: 22, minute: 0 });
+  });
+
+  it('ignores a theme saved by older versions (the app is dark only now)', async () => {
+    await db.runAsync(`INSERT INTO settings (key, value) VALUES ('theme', '"light"')`, []);
+    const s = await getSettings(db);
+    expect(s).toEqual(DEFAULT_SETTINGS);
+    expect('theme' in s).toBe(false);
   });
 
   it('rejects invalid values', async () => {
@@ -514,7 +521,7 @@ describe('settings', () => {
 
   it('wipeAllLocalData removes everything', async () => {
     await ingestParsed(db, smsAt(ZOMATO_UPI), clock);
-    await setSetting(db, 'theme', 'dark');
+    await setSetting(db, 'demoMode', true);
     await wipeAllLocalData(db);
     expect(await countTransactions(db)).toBe(0);
     expect(await getSettings(db)).toEqual(DEFAULT_SETTINGS);

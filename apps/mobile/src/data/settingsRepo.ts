@@ -10,7 +10,6 @@ const timeOfDay = z.object({
 export type TimeOfDay = z.infer<typeof timeOfDay>;
 
 export const settingsSchema = z.object({
-  theme: z.enum(['system', 'light', 'dark']).default('system'),
   morningTime: timeOfDay.default({ hour: 8, minute: 0 }),
   nightTime: timeOfDay.default({ hour: 22, minute: 0 }),
   weeklyTime: timeOfDay.default({ hour: 19, minute: 0 }),

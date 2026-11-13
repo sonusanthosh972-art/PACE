@@ -124,7 +124,7 @@ export default function Welcome() {
         <AppText variant="caption" color="accentText" center style={styles.eyebrow}>
           PAISA PULSE
         </AppText>
-        <AppText variant="title" center accessibilityRole="header" style={styles.headline}>
+        <AppText variant="serifTitle" center accessibilityRole="header" style={styles.headline}>
           Know exactly what you can spend today.
         </AppText>
         <AppText color="muted" center style={styles.subtitle}>
@@ -219,7 +219,7 @@ function TodayPreview({ animate }: { animate: boolean }) {
         </View>
       </View>
       <View style={styles.previewNumber}>
-        <AppText variant="title" tabular style={styles.previewAmount}>
+        <AppText variant="serifTitle" tabular style={styles.previewAmount}>
           {PREVIEW.left}
         </AppText>
         <AppText color="muted" tabular>

@@ -126,6 +126,10 @@ export interface InsightsData {
   hasData: boolean;
 }
 
+export function toInsightTx(t: Transaction): InsightTx {
+  return { ...t, merchantDisplay: displayMerchant(t.merchant, t.vpa) };
+}
+
 /** Cycles the month selector offers, newest first: this one and the five before it. */
 export const INSIGHT_CYCLES = 6;
 
@@ -161,9 +165,10 @@ export function useInsights(offset = 0) {
 
       // The previous cycle over the same number of days, so a cycle in progress is compared fairly.
       const elapsed = diffDays(cycle.start, last);
-      const prevLast = addDays(previous.start, elapsed) < previous.end
-        ? addDays(previous.start, elapsed)
-        : previous.end;
+      const prevLast =
+        addDays(previous.start, elapsed) < previous.end
+          ? addDays(previous.start, elapsed)
+          : previous.end;
       const prevTxs = all.filter(
         (t) => t.occurredAt < cycleFrom && t.occurredAt < startOfDayMs(addDays(prevLast, 1)),
       );

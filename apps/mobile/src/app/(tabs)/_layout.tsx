@@ -1,51 +1,30 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { StyleSheet } from 'react-native';
 
+import { TabBar } from '@/components/TabBar';
+import { TAB_PAGES } from '@/components/tabPages';
 import { useTheme } from '@/theme/ThemeProvider';
-import { FONT } from '@/theme/tokens';
+import { MOTION } from '@/theme/tokens';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-const TABS: { name: string; title: string; icon: IconName; iconActive: IconName }[] = [
-  { name: 'index', title: 'Today', icon: 'home-outline', iconActive: 'home' },
-  { name: 'insights', title: 'Insights', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
-  { name: 'transactions', title: 'Transactions', icon: 'list-outline', iconActive: 'list' },
-  { name: 'settings', title: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
-];
+const TABS = Object.entries(TAB_PAGES).map(([name, page]) => ({ name, title: page.label }));
 
 export default function TabsLayout() {
   const { colors, reducedMotion } = useTheme();
   return (
     <Tabs
+      tabBar={(props) => <TabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        animation: reducedMotion ? 'none' : 'fade',
+        // Pages shift gently left or right in the direction of the tab you tap.
+        animation: reducedMotion ? 'none' : 'shift',
+        transitionSpec: { animation: 'timing', config: { duration: MOTION.tabMs } },
         sceneStyle: { backgroundColor: colors.bg },
-        tabBarActiveTintColor: colors.accentText,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontFamily: FONT.medium, fontSize: 12 },
-        tabBarStyle: {
-          backgroundColor: colors.nav,
-          borderTopColor: colors.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          minHeight: 64,
-          paddingTop: 6,
-        },
       }}
     >
       {TABS.map((t) => (
         <Tabs.Screen
           key={t.name}
           name={t.name}
-          options={{
-            title: t.title,
-            tabBarAccessibilityLabel: t.title,
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? t.iconActive : t.icon} color={color} size={size} />
-            ),
-          }}
+          options={{ title: t.title, tabBarAccessibilityLabel: t.title }}
         />
       ))}
     </Tabs>

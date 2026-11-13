@@ -1,19 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  AppState,
-  type AppStateStatus,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { AppState, type AppStateStatus, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { TextField } from '@/components/Fields';
 import { Icon } from '@/components/Icon';
+import { KeyboardRevealContext, useKeyboardInset } from '@/components/useKeyboardInset';
 import {
   authenticateWithBiometrics,
   checkBiometrics,
@@ -44,6 +37,9 @@ interface AppLockProps {
  */
 export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) {
   const { colors } = useTheme();
+  const rootRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboard = useKeyboardInset(rootRef, scrollRef);
   const isLocked = useLockStore((s) => s.isLocked);
   const unlock = useLockStore((s) => s.unlock);
   const lock = useLockStore((s) => s.lock);
@@ -212,21 +208,29 @@ export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) 
   }
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.bg }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardAvoid}
+    <KeyboardRevealContext.Provider value={keyboard.reveal}>
+      <View
+        ref={rootRef}
+        style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.bg }]}
       >
+        {/* The keyboard covers the bottom on Android (edge-to-edge): give the page that much extra
+            scroll room so the password box and Unlock button can sit above it. */}
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboard.inset > 0 ? { paddingBottom: SPACE.xxl + keyboard.inset } : null,
+          ]}
           keyboardShouldPersistTaps="handled"
+          onScroll={(e) => keyboard.onScroll(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={32}
         >
           {/* Brand header */}
           <View style={styles.header}>
             <View style={[styles.iconBadge, { backgroundColor: colors.surface }]}>
               <Icon name="lock-closed" size={32} color="accentText" />
             </View>
-            <AppText variant="title" center accessibilityRole="header">
+            <AppText variant="serifTitle" center accessibilityRole="header">
               Paisa Pulse
             </AppText>
             <AppText variant="caption" color="muted" center style={styles.subtitle}>
@@ -330,8 +334,8 @@ export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) 
             </View>
           )}
         </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+      </View>
+    </KeyboardRevealContext.Provider>
   );
 }
 
@@ -339,9 +343,6 @@ const styles = StyleSheet.create({
   overlay: {
     zIndex: 9999,
     elevation: 9999,
-  },
-  keyboardAvoid: {
-    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,

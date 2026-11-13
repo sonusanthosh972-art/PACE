@@ -42,7 +42,7 @@ export default function PermissionExplainer() {
     >
       <View style={styles.hero}>
         <Icon name={copy.icon as IconName} size={44} color="accentText" />
-        <AppText variant="title" accessibilityRole="header">
+        <AppText variant="serifTitle" accessibilityRole="header">
           {copy.title}
         </AppText>
         <AppText variant="bodyStrong">{copy.why}</AppText>

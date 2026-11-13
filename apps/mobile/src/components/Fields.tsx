@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { parseRupeesToPaise } from '@/domain/money';
@@ -7,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { FONT, MIN_TOUCH, RADIUS, SPACE, TYPE } from '@/theme/tokens';
 
 import { AppText } from './AppText';
+import { KeyboardRevealContext } from './useKeyboardInset';
 
 interface FieldShellProps {
   label: string;
@@ -39,16 +40,25 @@ interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   error?: string | null;
 }
 
-export function TextField({ label, hint, error, ...input }: TextFieldProps) {
+export function TextField({ label, hint, error, onFocus, onBlur, ...input }: TextFieldProps) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
+  const reveal = useContext(KeyboardRevealContext);
   return (
     <FieldShell label={label} hint={hint} error={error}>
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={colors.muted}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        // A caller's own handlers run too, instead of replacing the focus border.
+        onFocus={(e) => {
+          setFocused(true);
+          reveal?.();
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
         style={[
           styles.input,
           TYPE.body,
@@ -95,6 +105,7 @@ export function MoneyField({
         : `${Math.trunc(valuePaise / 100)}.${String(valuePaise % 100).padStart(2, '0')}`,
   );
   const [focused, setFocused] = useState(false);
+  const reveal = useContext(KeyboardRevealContext);
 
   return (
     <FieldShell label={label} hint={hint} error={error}>
@@ -118,7 +129,10 @@ export function MoneyField({
           inputMode="decimal"
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            reveal?.();
+          }}
           onBlur={() => setFocused(false)}
           onChangeText={(raw) => {
             const next = sanitiseAmountInput(raw);

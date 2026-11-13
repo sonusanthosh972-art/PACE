@@ -1,7 +1,5 @@
 import type { CategoryId } from '@/domain/categories';
 
-export type ColorScheme = 'dark' | 'light';
-
 export interface Palette {
   bg: string;
   surface: string;
@@ -41,116 +39,59 @@ export interface Palette {
     chrome: string;
     card: string;
     cardBorder: string;
-    /** The safe-to-spend number: light mode is a touch heavier so it holds up on a pale card. */
+    /** Font for the safe-to-spend number. */
     heroAmount: { fontFamily: string; letterSpacing: number };
   };
   categories: Record<CategoryId, string>;
 }
 
-// No pure white or pure black anywhere.
-export const PALETTES: Record<ColorScheme, Palette> = {
-  dark: {
-    bg: '#16171A',
-    surface: '#1F2125',
-    elevated: '#282B30',
-    text: '#E9E7E2',
-    muted: '#9C9A94',
-    border: '#33363C',
-    accent: '#7BC6A4',
-    amber: '#E3B169',
-    coral: '#E08A7A',
-    accentText: '#7BC6A4',
-    amberText: '#E3B169',
-    coralText: '#E08A7A',
-    accentFill: '#7BC6A4',
-    onAccent: '#16171A',
-    track: '#2C2F35',
-    scrim: 'rgba(10, 11, 13, 0.6)',
-    nav: '#1F2125',
-    softTint: 0.08,
-    atmosphere: {
-      tint: 'rgba(10, 11, 13, 0.08)',
-      topShade: 'rgba(8, 10, 14, 0.35)',
-      fade: ['rgba(22, 23, 26, 0)', 'rgba(22, 23, 26, 0.35)', '#16171A'],
-      fadeStops: [0, 0.6, 1],
-      onImage: '#F4F2EC',
-      onImageMuted: 'rgba(244, 242, 236, 0.82)',
-      chrome: 'rgba(14, 18, 22, 0.45)',
-      card: 'rgba(17, 33, 29, 0.86)',
-      cardBorder: 'rgba(123, 198, 164, 0.24)',
-      heroAmount: { fontFamily: 'Inter_600SemiBold', letterSpacing: 0 },
-    },
-    categories: {
-      food: '#E08A7A',
-      coffee: '#C9A27E',
-      groceries: '#7BC6A4',
-      transport: '#7FA8D1',
-      shopping: '#C79BD1',
-      bills: '#E3B169',
-      subscriptions: '#9AA7E0',
-      entertainment: '#D99BB6',
-      health: '#8ACBC7',
-      rent_emi: '#A3A19A',
-      transfers: '#B8B4A8',
-      cash: '#B5C98A',
-      other: '#8F8D88',
-      uncategorised: '#6F6D69',
-    },
+// The app is dark only. No pure white or pure black anywhere.
+export const COLORS: Palette = {
+  bg: '#16171A',
+  surface: '#1F2125',
+  elevated: '#282B30',
+  text: '#E9E7E2',
+  muted: '#9C9A94',
+  border: '#33363C',
+  accent: '#7BC6A4',
+  amber: '#E3B169',
+  coral: '#E08A7A',
+  accentText: '#7BC6A4',
+  amberText: '#E3B169',
+  coralText: '#E08A7A',
+  accentFill: '#7BC6A4',
+  onAccent: '#16171A',
+  track: '#2C2F35',
+  scrim: 'rgba(10, 11, 13, 0.6)',
+  nav: '#1F2125',
+  softTint: 0.08,
+  atmosphere: {
+    tint: 'rgba(10, 11, 13, 0.08)',
+    topShade: 'rgba(8, 10, 14, 0.35)',
+    fade: ['rgba(22, 23, 26, 0)', 'rgba(22, 23, 26, 0.35)', '#16171A'],
+    fadeStops: [0, 0.6, 1],
+    onImage: '#F4F2EC',
+    onImageMuted: 'rgba(244, 242, 236, 0.82)',
+    chrome: 'rgba(14, 18, 22, 0.45)',
+    card: 'rgba(17, 33, 29, 0.86)',
+    cardBorder: 'rgba(123, 198, 164, 0.24)',
+    heroAmount: { fontFamily: 'Inter_600SemiBold', letterSpacing: 0 },
   },
-  light: {
-    bg: '#F7F8F5',
-    surface: '#F1F3EF',
-    elevated: '#E8ECE6',
-    text: '#24262A',
-    muted: '#6B6A66',
-    border: '#E1E5DF',
-    // Same mint as dark mode for graphics and the main button; text keeps the deeper green.
-    accent: '#72CFA9',
-    amber: '#B07C2A',
-    coral: '#B85A4A',
-    accentText: '#2F7356',
-    amberText: '#85601F',
-    coralText: '#9E4536',
-    accentFill: '#72CFA9',
-    onAccent: '#16171A',
-    track: '#E2E7E1',
-    scrim: 'rgba(36, 38, 42, 0.35)',
-    nav: '#FBFBF8',
-    softTint: 0.16,
-    atmosphere: {
-      // A light daylight wash softens the image; a long, gradual fade melts it into the page.
-      tint: 'rgba(247, 248, 245, 0.14)',
-      topShade: 'rgba(8, 10, 14, 0.28)',
-      fade: [
-        'rgba(247, 248, 245, 0)',
-        'rgba(247, 248, 245, 0.2)',
-        'rgba(247, 248, 245, 0.78)',
-        '#F7F8F5',
-      ],
-      fadeStops: [0, 0.38, 0.68, 0.9],
-      onImage: '#F4F2EC',
-      onImageMuted: 'rgba(244, 242, 236, 0.85)',
-      chrome: 'rgba(14, 18, 22, 0.35)',
-      card: '#F1F3EF',
-      cardBorder: 'rgba(36, 38, 42, 0.06)',
-      heroAmount: { fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
-    },
-    categories: {
-      food: '#B85A4A',
-      coffee: '#8C6A4A',
-      groceries: '#3E8E6B',
-      transport: '#4A739C',
-      shopping: '#8A5C96',
-      bills: '#B07C2A',
-      subscriptions: '#5E6BAA',
-      entertainment: '#A55C7E',
-      health: '#3F8682',
-      rent_emi: '#7A7870',
-      transfers: '#8E8A7E',
-      cash: '#6F8642',
-      other: '#77756F',
-      uncategorised: '#9A978F',
-    },
+  categories: {
+    food: '#E08A7A',
+    coffee: '#C9A27E',
+    groceries: '#7BC6A4',
+    transport: '#7FA8D1',
+    shopping: '#C79BD1',
+    bills: '#E3B169',
+    subscriptions: '#9AA7E0',
+    entertainment: '#D99BB6',
+    health: '#8ACBC7',
+    rent_emi: '#A3A19A',
+    transfers: '#B8B4A8',
+    cash: '#B5C98A',
+    other: '#8F8D88',
+    uncategorised: '#6F6D69',
   },
 };
 
@@ -171,7 +112,8 @@ export const FONT = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
+  serifBold: 'PlayfairDisplay_700Bold',
+  serifSemibold: 'PlayfairDisplay_600SemiBold',
 } as const;
 
 /** Sizes in points; line height 1.5× for running text. Hero 52pt, tabular numbers. */
@@ -191,6 +133,22 @@ export const TYPE = {
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
+  /** Elegant serif heading variant - large display style. */
+  serifHero: { fontSize: 52, lineHeight: 62, fontFamily: FONT.serifBold },
+  /** Elegant serif heading variant - page title style. */
+  serifTitle: {
+    fontSize: 28,
+    lineHeight: 36,
+    fontFamily: FONT.serifBold,
+    letterSpacing: -0.5,
+  },
+  /** Elegant serif heading variant - section heading style. */
+  serifHeading: {
+    fontSize: 22,
+    lineHeight: 30,
+    fontFamily: FONT.serifSemibold,
+    letterSpacing: -0.3,
+  },
 } as const;
 
 export type TypeVariant = keyof typeof TYPE;
@@ -204,6 +162,10 @@ export const MOTION = {
   crossfadeMs: 900,
   /** Small list/feedback fades. */
   fadeMs: 200,
+  /** Switching between bottom tabs. */
+  tabMs: 260,
+  /** Delay between cards easing in one after another. */
+  staggerMs: 60,
   pressScale: 0.97,
   spring: { damping: 18, stiffness: 180, mass: 1 },
 } as const;

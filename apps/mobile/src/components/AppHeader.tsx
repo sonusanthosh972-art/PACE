@@ -1,18 +1,32 @@
 import { router } from 'expo-router';
 import { StyleSheet, View, type TextStyle } from 'react-native';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import { useTimeOfDay } from '@/lib/useTimeOfDay';
 import { useAuthStore } from '@/state/authStore';
 import { useReviewCount } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
-import { ICON, MIN_TOUCH, RADIUS, SPACE } from '@/theme/tokens';
+import { ICON, MIN_TOUCH, MOTION, RADIUS, SPACE } from '@/theme/tokens';
 
 import { AppLogo } from './AppLogo';
 import { AppText } from './AppText';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
+import { PageChip } from './PageChip';
+import type { TabPage } from './tabPages';
 import { TimeBackground } from './TimeBackground';
+
+/** Keeps light text readable wherever it sits on the city image. */
+export const ON_IMAGE_SHADOW: TextStyle = {
+  textShadowColor: 'rgba(0, 0, 0, 0.35)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 6,
+};
 
 /** Side padding shared by every tab, so the header and content line up the same everywhere. */
 export const TAB_GUTTER = SPACE.lg;
@@ -36,18 +50,30 @@ export function HeaderBackground({ scrollY }: { scrollY?: SharedValue<number> })
 }
 
 /**
- * The header at the top of every tab: logo and name, the bell (and the account in dark mode), then
- * the page title and a short line under it. Text sits on the city image, so it is light in both
- * themes. Render it inside a screen whose background is `<HeaderBackground />`.
+ * The header at the top of every tab: logo and name with the bell and account, then which page
+ * this is, its title, and a one-line hint of what you can do here. Text sits on the city image, so
+ * it is light. Render it inside a screen whose background is `<HeaderBackground />`.
  */
-export function AppHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  const { colors, scheme } = useTheme();
-  // Light mode keeps the header to the essentials: the account lives in Settings.
-  const showAccount = scheme === 'dark';
+export function AppHeader({
+  page,
+  title,
+  hint,
+}: {
+  page: TabPage;
+  title: string;
+  /** What the person can do on this page, in a few words. */
+  hint: string;
+}) {
+  const { colors, reducedMotion } = useTheme();
+  // The page label, title and hint ease in one after another the first time the page opens.
+  const enter = (step: number) =>
+    reducedMotion
+      ? FadeIn.duration(MOTION.fadeMs)
+      : FadeInDown.duration(MOTION.screenMs).delay(step * MOTION.staggerMs);
   const needsReview = useReviewCount().data ?? 0;
   const user = useAuthStore((s) => s.user);
-  const onImage: TextStyle = { color: colors.atmosphere.onImage, ...styles.textShadow };
-  const onImageMuted: TextStyle = { color: colors.atmosphere.onImageMuted, ...styles.textShadow };
+  const onImage: TextStyle = { color: colors.atmosphere.onImage, ...ON_IMAGE_SHADOW };
+  const onImageMuted: TextStyle = { color: colors.atmosphere.onImageMuted, ...ON_IMAGE_SHADOW };
   const initial = (user?.name || user?.email || '').trim().charAt(0).toUpperCase();
 
   return (
@@ -55,7 +81,9 @@ export function AppHeader({ title, subtitle }: { title: string; subtitle: string
       <View style={styles.brandRow}>
         <View style={styles.brand}>
           <AppLogo size={28} variant="mark" tone="dark" animated />
-          <AppText variant="heading" style={onImage}>
+          {/* One line, with a little room for the shadow: Android measures text without its
+              shadow and otherwise wraps "Pulse" onto a clipped second line. */}
+          <AppText variant="heading" numberOfLines={1} style={[onImage, styles.brandName]}>
             Paisa Pulse
           </AppText>
         </View>
@@ -75,45 +103,45 @@ export function AppHeader({ title, subtitle }: { title: string; subtitle: string
               <View style={[styles.badgeDot, { backgroundColor: colors.accent }]} />
             ) : null}
           </PressableScale>
-          {showAccount ? (
-            <PressableScale
-              onPress={() => router.push('/settings/auth')}
-              accessibilityRole="button"
-              accessibilityLabel={user ? 'Your account' : 'Sign in'}
-              style={[styles.chrome, { backgroundColor: colors.atmosphere.chrome }]}
-            >
-              {initial ? (
-                <AppText variant="label" style={onImage}>
-                  {initial}
-                </AppText>
-              ) : (
-                <Icon name="person-outline" size={ICON.md} tint={colors.atmosphere.onImage} />
-              )}
-            </PressableScale>
-          ) : null}
+          <PressableScale
+            onPress={() => router.push('/settings/auth')}
+            accessibilityRole="button"
+            accessibilityLabel={user ? 'Your account' : 'Sign in'}
+            style={[styles.chrome, { backgroundColor: colors.atmosphere.chrome }]}
+          >
+            {initial ? (
+              <AppText variant="label" style={onImage}>
+                {initial}
+              </AppText>
+            ) : (
+              <Icon name="person-outline" size={ICON.md} tint={colors.atmosphere.onImage} />
+            )}
+          </PressableScale>
         </View>
       </View>
-      <AppText
-        variant="title"
-        accessibilityRole="header"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
-        style={onImage}
-      >
-        {title}
-      </AppText>
-      <AppText style={onImageMuted}>{subtitle}</AppText>
+      <Animated.View entering={enter(0)}>
+        <PageChip page={page} />
+      </Animated.View>
+      <Animated.View entering={enter(1)}>
+        <AppText
+          variant="serifTitle"
+          accessibilityRole="header"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={onImage}
+        >
+          {title}
+        </AppText>
+      </Animated.View>
+      <Animated.View entering={enter(2)}>
+        <AppText style={onImageMuted}>{hint}</AppText>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  textShadow: {
-    textShadowColor: 'rgba(0, 0, 0, 0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
   hero: { gap: SPACE.xs, marginBottom: SPACE.sm },
   brandRow: {
     flexDirection: 'row',
@@ -122,6 +150,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.md,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  brandName: { paddingRight: SPACE.sm },
   chromeRow: { flexDirection: 'row', gap: SPACE.sm },
   chrome: {
     width: MIN_TOUCH - SPACE.xs,
