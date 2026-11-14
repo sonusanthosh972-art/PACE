@@ -288,7 +288,7 @@ export default function SettingsScreen() {
 
       <View style={styles.about}>
         <AppLogo size={32} variant="mark" />
-        <AppText variant="bodyStrong">Paisa Pulse</AppText>
+        <AppText variant="bodyStrong">PACE</AppText>
         <AppText variant="caption" color="muted" center style={styles.aboutBody}>
           Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to
           your server.

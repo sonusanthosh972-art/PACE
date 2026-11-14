@@ -58,7 +58,7 @@ describe('PaceLogo', () => {
       expect(html).toContain(`@keyframes ${keyframes}`);
     }
     expect(html).not.toContain('animation-play-state: paused');
-    expect(screen.getByRole('image', { name: 'Paisa Pulse' })).toBeOnTheScreen();
+    expect(screen.getByRole('image', { name: 'PACE' })).toBeOnTheScreen();
   });
 
   it('waits to mount until it can be seen (play=false while the splash is up)', async () => {

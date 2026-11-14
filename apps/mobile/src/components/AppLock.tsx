@@ -97,7 +97,7 @@ export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) 
     setAuthError(null);
     try {
       const success = await authenticateWithBiometrics(
-        `Unlock Paisa Pulse with your ${deviceUnlockLabel}`,
+        `Unlock PACE with your ${deviceUnlockLabel}`,
       );
       if (!mountedRef.current) return;
       if (success) {
@@ -231,7 +231,7 @@ export function AppLock({ onboardingComplete, canPrompt = true }: AppLockProps) 
               <Icon name="lock-closed" size={32} color="accentText" />
             </View>
             <AppText variant="serifTitle" center accessibilityRole="header">
-              Paisa Pulse
+              PACE
             </AppText>
             <AppText variant="caption" color="muted" center style={styles.subtitle}>
               Your financial data is locked. Authenticate to continue.

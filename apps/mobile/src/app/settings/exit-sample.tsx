@@ -56,8 +56,8 @@ export default function ExitSample() {
       </AppText>
       <AppText color="muted">
         The payments you see now are examples. This removes them from this phone and takes you back
-        to setup, where you enter your salary and allow SMS access. Paisa Pulse then reads the last
-        90 days of your bank SMS.
+        to setup, where you enter your salary and allow SMS access. PACE then reads the last 90 days
+        of your bank SMS.
       </AppText>
       <AppText color="muted">
         Your sign-in and anything already on the server stay as they are.

@@ -1,4 +1,4 @@
-# Paisa Pulse
+# PACE
 
 Personal spending tracker for India: reads bank SMS on-device, gives you a daily budget.
 

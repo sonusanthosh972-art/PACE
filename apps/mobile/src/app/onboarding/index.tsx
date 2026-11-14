@@ -121,9 +121,6 @@ export default function Welcome() {
       </View>
 
       <Reveal show={introDone} step={0} style={styles.headingBlock}>
-        <AppText variant="caption" color="accentText" center style={styles.eyebrow}>
-          PAISA PULSE
-        </AppText>
         <AppText variant="serifTitle" center accessibilityRole="header" style={styles.headline}>
           Know exactly what you can spend today.
         </AppText>
@@ -248,7 +245,6 @@ const styles = StyleSheet.create({
     paddingBottom: SPACE.lg,
   },
   headingBlock: { alignItems: 'center', gap: SPACE.sm },
-  eyebrow: { letterSpacing: 3, fontSize: 12 },
   headline: { fontSize: 28, lineHeight: 36, maxWidth: 320 },
   subtitle: { maxWidth: 320 },
   preview: {

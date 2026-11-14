@@ -71,7 +71,7 @@ export function Header({
   onSearchChange,
 }: HeaderProps) {
   const router = useRouter();
-  const current = TAB_TITLES[activeTab] || { title: 'Admin Console', subtitle: 'Paisa Pulse' };
+  const current = TAB_TITLES[activeTab] || { title: 'Admin Console', subtitle: 'PACE' };
 
   return (
     <header

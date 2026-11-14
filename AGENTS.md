@@ -1,4 +1,4 @@
-# Project Agent Guidelines: Paisa Pulse (Monorepo)
+# Project Agent Guidelines: PACE (Monorepo)
 
 This repository is governed by the **GRAVITAS Engineering Reliability Runtime** ([`.agents/skills/gravitas/SKILL.md`](.agents/skills/gravitas/SKILL.md)). All coding agents working in this repository must operate under its core invariants and protocols.
 

@@ -111,7 +111,7 @@ export function Sidebar({
             </div>
             <div>
               <div style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.02em', color: '#F8F9FA' }}>
-                PAISA PULSE
+                PACE
               </div>
               <div style={{ fontSize: '11px', color: 'var(--accent-emerald)', fontWeight: 600, letterSpacing: '0.05em' }}>
                 ADMIN CONSOLE

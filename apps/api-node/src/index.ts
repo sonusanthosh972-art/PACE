@@ -24,9 +24,9 @@ async function bootstrap() {
   const cron = startDailySummaryCron();
   let keepAlive: KeepAlive | null = null;
   const server = createApp(config).listen(config.port, config.host, () => {
-    logger.info(`[PaisaPulse API] Listening on http://${config.host}:${config.port}`);
+    logger.info(`[PACE API] Listening on http://${config.host}:${config.port}`);
     if (!config.adminApiKey) {
-      logger.warn('[PaisaPulse API] ADMIN_API_KEY not set: admin endpoints are disabled.');
+      logger.warn('[PACE API] ADMIN_API_KEY not set: admin endpoints are disabled.');
     }
     // Only once the server can answer its own pings.
     keepAlive = startKeepAlive();

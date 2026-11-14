@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import Animated, { useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme/ThemeProvider';
-import { RADIUS, SPACE } from '@/theme/tokens';
+import { COLORS, RADIUS, SPACE } from '@/theme/tokens';
 
 interface SkeletonProps {
   width?: number | string;
@@ -91,7 +91,7 @@ export function BudgetSkeletonCard() {
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#2C2F35',
+    backgroundColor: COLORS.track,
   },
   container: {
     gap: SPACE.md,

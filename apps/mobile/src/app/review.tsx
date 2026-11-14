@@ -92,7 +92,7 @@ export default function ReviewScreen() {
     <Screen>
       <View style={styles.header}>
         <AppText variant="caption" color="muted">
-          Tag each payee once. Paisa Pulse remembers it and tags their future payments for you.
+          Tag each payee once. PACE remembers it and tags their future payments for you.
         </AppText>
       </View>
 

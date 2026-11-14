@@ -22,13 +22,13 @@ describe('AppLock component', () => {
 
   it('renders nothing when onboarding is not complete', async () => {
     const { queryByText } = await render(<AppLock onboardingComplete={false} />);
-    expect(queryByText('Paisa Pulse')).toBeNull();
+    expect(queryByText('PACE')).toBeNull();
   });
 
   it('renders nothing when already unlocked', async () => {
     useLockStore.setState({ isLocked: false });
     const { queryByText } = await render(<AppLock onboardingComplete={true} />);
-    expect(queryByText('Paisa Pulse')).toBeNull();
+    expect(queryByText('PACE')).toBeNull();
   });
 
   it('renders lock screen with Fingerprint and account password option for signed-in user', async () => {
@@ -46,7 +46,7 @@ describe('AppLock component', () => {
     });
     const { getByRole, getByText } = await render(<AppLock onboardingComplete={true} />);
 
-    expect(getByRole('header', { name: 'Paisa Pulse' })).toBeTruthy();
+    expect(getByRole('header', { name: 'PACE' })).toBeTruthy();
     expect(getByText('Your financial data is locked. Authenticate to continue.')).toBeTruthy();
 
     // Option 1: Fingerprint
@@ -147,7 +147,7 @@ describe('AppLock component', () => {
       <AppLock onboardingComplete={true} canPrompt={false} />,
     );
     // The lock is already covering the app under the splash…
-    expect(getByRole('header', { name: 'Paisa Pulse' })).toBeTruthy();
+    expect(getByRole('header', { name: 'PACE' })).toBeTruthy();
     await act(async () => {
       await new Promise((r) => setTimeout(r, 450));
     });

@@ -7,7 +7,7 @@ import { WebView } from 'react-native-webview';
 import geminiSvg from '../../../assets/gemini-svg.svg';
 
 import { useTheme } from '@/theme/ThemeProvider';
-import { RADIUS } from '@/theme/tokens';
+import { COLORS, RADIUS } from '@/theme/tokens';
 
 /*
  * Plays assets/gemini-svg.svg exactly as designed.
@@ -18,7 +18,8 @@ import { RADIUS } from '@/theme/tokens';
  * the bundled asset itself is read and rendered.
  */
 
-const SVG_BACKGROUND = '#0B0D11'; // the SVG's .bg-rect, so there is no flash while it loads
+/** The SVG is transparent; the app background behind it means no visible frame or load flash. */
+const SVG_BACKGROUND = COLORS.bg;
 const CYCLE_MS = 4200; // the SVG's animation duration
 const FORMED_AT = 0.52; // emergeE finishes at 52%: the full word "PACE" is on screen
 /** With Reduce Motion: freeze on the fully formed frame (inside the 52%–85% hold). */
@@ -103,7 +104,7 @@ export function PaceLogo({ width, play = true, staticFormed = false, onIntroEnd 
       style={[styles.frame, { width, height }]}
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Paisa Pulse"
+      accessibilityLabel="PACE"
     >
       {play && svg ? (
         <WebView

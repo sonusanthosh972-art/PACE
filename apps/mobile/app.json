@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Paisa Pulse",
+    "name": "PACE",
     "slug": "paisa-pulse",
     "scheme": "paisapulse",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0B0D11",
+    "backgroundColor": "#16171A",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.paisapulse.app"
@@ -19,7 +19,7 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0B0D11",
+        "backgroundColor": "#16171A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -38,7 +38,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B0D11",
+          "backgroundColor": "#16171A",
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain"

@@ -26,7 +26,7 @@ export interface AppLogoProps {
   size?: number;
   /**
    * - 'mark': Iconic P symbol (emerald slit stem + platinum bowl).
-   * - 'full': P mark + PACE / Paisa Pulse wordmark.
+   * - 'full': P mark + PACE wordmark.
    * - 'hero': Large centered presentation with optional tagline.
    */
   variant?: 'mark' | 'full' | 'hero';
@@ -39,7 +39,7 @@ export interface AppLogoProps {
 }
 
 /**
- * Native vector renderer for the PACE / Paisa Pulse logo from assets/gemini-svg.svg.
+ * Native vector renderer for the PACE logo from assets/gemini-svg.svg.
  * Renders the emerald slit stem, platinum geometric bowl, and brushed typography
  * with GPU-accelerated Skia vectors and optional breathing micro-animations.
  */
@@ -126,7 +126,7 @@ export function AppLogo({
       ]}
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Paisa Pulse logo mark"
+      accessibilityLabel="PACE logo mark"
     >
       <Canvas style={StyleSheet.absoluteFill}>
         {/* Ambient glow behind emerald stem */}
@@ -175,10 +175,7 @@ export function AppLogo({
         {logoMark}
         <View style={styles.heroTextWrap}>
           <AppText variant="hero" style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>
-            Paisa Pulse
-          </AppText>
-          <AppText variant="label" color="accentText" style={styles.heroBadge}>
-            PACE ENGINE
+            PACE
           </AppText>
           {tagline ? (
             <AppText color="muted" center style={styles.heroTagline}>
@@ -199,7 +196,7 @@ export function AppLogo({
           variant="heading"
           style={[styles.brandNameInline, !isDark && styles.brandTitleLight]}
         >
-          Paisa Pulse
+          PACE
         </AppText>
         {tagline ? (
           <AppText variant="caption" color="muted">
@@ -233,12 +230,6 @@ const styles = StyleSheet.create({
   },
   brandTitleLight: {
     color: '#16171A',
-  },
-  heroBadge: {
-    letterSpacing: 2,
-    fontSize: 11,
-    fontFamily: FONT.semibold,
-    opacity: 0.9,
   },
   heroTagline: {
     marginTop: SPACE.xs,

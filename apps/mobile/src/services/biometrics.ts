@@ -92,9 +92,7 @@ export async function checkBiometrics(): Promise<BiometricStatus> {
  * Asks the phone to confirm it is the owner: fingerprint/face when enrolled, otherwise (or as the
  * fallback) the phone's own PIN, pattern or password. False when the phone has no screen lock.
  */
-export async function authenticateWithBiometrics(
-  promptMessage = 'Unlock Paisa Pulse',
-): Promise<boolean> {
+export async function authenticateWithBiometrics(promptMessage = 'Unlock PACE'): Promise<boolean> {
   try {
     const status = await checkBiometrics();
     if (!status.deviceSecure) return false;

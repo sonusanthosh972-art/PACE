@@ -13,7 +13,7 @@ describe('PaceLoader', () => {
     for (const letter of ['A', 'C', 'E']) {
       expect(screen.getByText(letter, HIDDEN)).toBeOnTheScreen();
     }
-    expect(screen.getByLabelText('Paisa Pulse logo mark', HIDDEN)).toBeOnTheScreen();
+    expect(screen.getByLabelText('PACE logo mark', HIDDEN)).toBeOnTheScreen();
   });
 
   it('draws every letter, P included, in one colour on a button', async () => {

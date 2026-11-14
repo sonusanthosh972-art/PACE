@@ -56,7 +56,7 @@ export default function DeleteData() {
           disabled={!confirmed}
           loading={busy}
           onPress={onDelete}
-          accessibilityHint="Permanently deletes all your Paisa Pulse data"
+          accessibilityHint="Permanently deletes all your PACE data"
         />
       }
     >
@@ -71,7 +71,7 @@ export default function DeleteData() {
         {[
           'All transactions, categories and rules on this phone',
           'Your salary, fixed expenses and savings goal',
-          'Your account and synced data on the Paisa Pulse server',
+          'Your account and synced data on the PACE server',
         ].map((line) => (
           <View key={line} style={styles.bullet}>
             <Icon name="ellipse" size={8} color="muted" />
@@ -79,9 +79,7 @@ export default function DeleteData() {
           </View>
         ))}
       </View>
-      <AppText color="muted">
-        Your bank SMS stay in your SMS app; Paisa Pulse never changes them.
-      </AppText>
+      <AppText color="muted">Your bank SMS stay in your SMS app; PACE never changes them.</AppText>
       <TextField
         label={`Type ${CONFIRM_WORD} to confirm`}
         value={typed}

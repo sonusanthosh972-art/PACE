@@ -1,4 +1,4 @@
-# Render Blueprint: Paisa Pulse API (apps/api-node).
+# Render Blueprint: PACE API (apps/api-node).
 # Render dashboard → New → Blueprint → pick this repo. Secrets marked sync: false are entered there.
 # The admin dashboard is hosted on Vercel (apps/admin), not here.
 version: "1"
@@ -41,7 +41,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: MAIL_FROM
-        sync: false # e.g. "Paisa Pulse <no-reply@yourdomain.com>" on a domain verified in Resend
+        sync: false # e.g. "PACE <no-reply@yourdomain.com>" on a domain verified in Resend
       # Optional error reporting (https://sentry.io). Leave empty to turn it off.
       - key: SENTRY_DSN
         sync: false

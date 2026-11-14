@@ -23,7 +23,8 @@ import { TimeBackground } from './TimeBackground';
 
 /** Keeps light text readable wherever it sits on the city image. */
 export const ON_IMAGE_SHADOW: TextStyle = {
-  textShadowColor: 'rgba(0, 0, 0, 0.35)',
+  // Near-black from the palette's scrim (the app never uses pure black).
+  textShadowColor: 'rgba(10, 11, 13, 0.35)',
   textShadowOffset: { width: 0, height: 1 },
   textShadowRadius: 6,
 };
@@ -82,9 +83,9 @@ export function AppHeader({
         <View style={styles.brand}>
           <AppLogo size={28} variant="mark" tone="dark" animated />
           {/* One line, with a little room for the shadow: Android measures text without its
-              shadow and otherwise wraps "Pulse" onto a clipped second line. */}
+              shadow and could otherwise wrap onto a clipped second line. */}
           <AppText variant="heading" numberOfLines={1} style={[onImage, styles.brandName]}>
-            Paisa Pulse
+            PACE
           </AppText>
         </View>
         <View style={styles.chromeRow}>

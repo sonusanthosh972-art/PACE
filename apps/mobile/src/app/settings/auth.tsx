@@ -130,7 +130,7 @@ export default function AuthScreen() {
       const db = await getAppDb();
       await setSetting(db, 'apiBaseUrl', clean);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      Alert.alert('Server address saved', `Paisa Pulse will connect to:\n${clean}`);
+      Alert.alert('Server address saved', `PACE will connect to:\n${clean}`);
     } catch {
       // Ignore DB write errors
     }
@@ -283,7 +283,7 @@ export default function AuthScreen() {
     <Card style={styles.serverCard}>
       <AppText variant="bodyStrong">Server Address</AppText>
       <AppText variant="caption" color="muted">
-        Already set to the Paisa Pulse server. Change it only if you run your own server (for local
+        Already set to the PACE server. Change it only if you run your own server (for local
         development: http://&lt;computer-ip&gt;:5080).
       </AppText>
       <TextField
@@ -306,7 +306,7 @@ export default function AuthScreen() {
       </View>
       {serverAddress.trim().replace(/\/+$/, '') !== DEFAULT_API_URL ? (
         <Button
-          label="Use the Paisa Pulse server"
+          label="Use the PACE server"
           variant="ghost"
           compact
           onPress={onResetServerAddress}

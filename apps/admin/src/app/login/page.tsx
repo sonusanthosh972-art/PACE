@@ -51,7 +51,7 @@ export default function LoginPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Lock size={18} />
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Paisa Pulse Admin</h1>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>PACE Admin</h1>
         </div>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Sign in with the admin password.</p>
         <label htmlFor="password" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>

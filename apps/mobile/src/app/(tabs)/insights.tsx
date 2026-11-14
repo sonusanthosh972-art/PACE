@@ -181,7 +181,7 @@ function StoryEmpty({ past }: { past: boolean }) {
       <AppText color="muted" center style={styles.emptyBody}>
         {past
           ? 'Pick another month above, or come back once more payments have arrived.'
-          : 'As your everyday spending arrives, Paisa Pulse gently turns it into clear patterns and useful insights.'}
+          : 'As your everyday spending arrives, PACE gently turns it into clear patterns and useful insights.'}
       </AppText>
       {past ? null : (
         <Button

@@ -29,12 +29,18 @@ describe('palette', () => {
 });
 
 describe('brand & splash colours', () => {
-  it('splash platinum off-white on carbon background has ≥ 4.5:1 contrast', () => {
-    expect(contrastRatio('#F8F9FA', '#0B0D11')).toBeGreaterThanOrEqual(4.5);
+  it('splash platinum off-white on the app background has ≥ 4.5:1 contrast', () => {
+    expect(contrastRatio('#F8F9FA', COLORS.bg)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('splash emerald on carbon background has ≥ 4.5:1 contrast', () => {
-    expect(contrastRatio('#10E896', '#0B0D11')).toBeGreaterThanOrEqual(4.5);
+  it('splash emerald on the app background has ≥ 4.5:1 contrast', () => {
+    expect(contrastRatio('#10E896', COLORS.bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('network banner text on the elevated surface has ≥ 4.5:1 contrast', () => {
+    for (const fg of [COLORS.coralText, COLORS.amberText, COLORS.muted, COLORS.text]) {
+      expect(contrastRatio(fg, COLORS.elevated)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
 

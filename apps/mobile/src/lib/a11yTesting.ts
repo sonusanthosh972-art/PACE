@@ -1,4 +1,4 @@
-// A11y testing suite for Paisa Pulse
+// A11y testing suite for PACE
 
 export interface A11yTestResult {
   passed: boolean;
@@ -13,7 +13,7 @@ export interface A11yIssue {
 }
 
 /**
- * Accessibility Testing Suite for Paisa Pulse
+ * Accessibility Testing Suite for PACE
  * Tests for WCAG 2.1 compliance
  */
 export class A11yTestSuite {

@@ -9,7 +9,7 @@ import { useAuthStore } from '@/state/authStore';
 jest.mock('@/components/brand/PaceLogo', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    PaceLogo: () => <View accessible accessibilityRole="image" accessibilityLabel="Paisa Pulse" />,
+    PaceLogo: () => <View accessible accessibilityRole="image" accessibilityLabel="PACE" />,
   };
 });
 
@@ -36,7 +36,7 @@ function renderWelcome() {
 describe('Welcome (landing)', () => {
   it('shows the brand mark, one clear promise and an honest privacy line', async () => {
     await renderWelcome();
-    expect(screen.getByRole('image', { name: 'Paisa Pulse' })).toBeOnTheScreen();
+    expect(screen.getByRole('image', { name: 'PACE' })).toBeOnTheScreen();
     expect(
       screen.getByRole('header', { name: 'Know exactly what you can spend today.' }),
     ).toBeOnTheScreen();

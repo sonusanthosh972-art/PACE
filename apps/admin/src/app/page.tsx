@@ -630,7 +630,7 @@ export default function AdminPage() {
               }}
             >
               {dataSource === 'loading'
-                ? 'Connecting to the Paisa Pulse API…'
+                ? 'Connecting to the PACE API…'
                 : `Cannot load data: ${dataError ?? 'the API is unreachable'}. Start the API (npm run api), check ADMIN_API_KEY, then press refresh.`}
             </div>
           )}

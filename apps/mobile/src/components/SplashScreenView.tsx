@@ -5,6 +5,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { WebView } from 'react-native-webview';
 
 import { useTheme } from '@/theme/ThemeProvider';
+import { COLORS } from '@/theme/tokens';
 
 export interface SplashScreenViewProps {
   /** When true, initialization (fonts, db, settings) has finished. */
@@ -15,11 +16,22 @@ export interface SplashScreenViewProps {
   dwellMs?: number;
 }
 
-const BACKGROUND_COLOR = '#0B0D11';
+/** The app's own background, so the splash fades into the first screen without a step. */
+const BACKGROUND_COLOR = COLORS.bg;
 
 /**
- * Splash sequence (fast "coin travel"), timings in ms. Logo artwork, colours, proportions and
- * background are the SVG's own and unchanged; only the motion differs:
+ * A, C and E as Inter SemiBold outlines (the app's typeface), identical to assets/gemini-svg.svg.
+ * Paths, not <text>: the WebView has no Inter, and a fallback font would change the logo.
+ */
+export const PACE_LETTER_PATHS = {
+  A: 'M404.5 310L381 310L422.9 190L450.2 190L493.0 310L469.4 310L448.1 247.7Q444.9 238 441.6 225.8Q438.2 213.6 434.1 198.1L434.1 198.1L438.6 198.1Q434.6 213.8 431.3 226.0Q428.0 238.3 425.1 247.7L425.1 247.7L404.5 310ZM468.6 280.3L405.4 280.3L405.4 263.0L468.6 263.0L468.6 280.3Z',
+  C: 'M560.0 311.6L560.0 311.6Q544.2 311.6 531.8 304.3Q519.4 297.0 512.2 283.2Q505.0 269.4 505.0 250.1L505.0 250.1Q505.0 230.7 512.2 216.9Q519.4 203.0 531.9 195.7Q544.3 188.4 560.0 188.4L560.0 188.4Q569.8 188.4 578.4 191.2Q586.9 193.9 593.7 199.3Q600.4 204.7 604.7 212.4Q609.1 220.1 610.5 229.9L610.5 229.9L588.9 229.9Q587.8 224.6 585.3 220.4Q582.7 216.3 579.0 213.5Q575.2 210.6 570.4 209.1Q565.7 207.6 560.3 207.6L560.3 207.6Q550.4 207.6 542.8 212.6Q535.2 217.5 530.9 227.0Q526.6 236.5 526.6 250.1L526.6 250.1Q526.6 263.9 531.0 273.3Q535.3 282.7 542.9 287.5Q550.5 292.4 560.2 292.4L560.2 292.4Q565.6 292.4 570.3 290.9Q575.1 289.4 578.9 286.5Q582.7 283.7 585.3 279.5Q587.9 275.4 588.9 270.1L588.9 270.1L610.6 270.1Q609.4 278.7 605.3 286.2Q601.3 293.7 594.7 299.4Q588.1 305.2 579.3 308.4Q570.6 311.6 560.0 311.6Z',
+  E: 'M700.9 310L622.6 310L622.6 190L700.6 190L700.6 208.1L644.1 208.1L644.1 240.5L696.4 240.5L696.4 258.4L644.1 258.4L644.1 291.9L700.9 291.9L700.9 310Z',
+} as const;
+
+/**
+ * Splash sequence (fast "coin travel"), timings in ms. Logo artwork, colours and proportions are
+ * the SVG's own; the background is the app's, and only the motion differs:
  *  1. P darts in from off-screen right like a coin in flight, overshoots slightly, settles left.
  *  2. Right as it settles, A, C and E slide in from the right one after another to form PACE.
  *  3. The finished PACE holds for HOLD_MS, then the splash fades into the app.
@@ -79,17 +91,6 @@ function generateSvgHtml(reducedMotion: boolean): string {
       display: block;
       width: 100%;
       height: 100%;
-    }
-    .bg-rect {
-      fill: transparent;
-    }
-    .real-letter {
-      font-family: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 168px;
-      font-weight: 700;
-      fill: url(#platinum);
-      dominant-baseline: central;
-      text-anchor: middle;
     }
     ${
       reducedMotion
@@ -167,18 +168,16 @@ function generateSvgHtml(reducedMotion: boolean): string {
     </filter>
   </defs>
 
-  <rect width="1000" height="500" class="bg-rect" />
-
   <g class="char-a">
-    <text x="435" y="250" class="real-letter">A</text>
+    <path fill="url(#platinum)" d="${PACE_LETTER_PATHS.A}" />
   </g>
 
   <g class="char-c">
-    <text x="555" y="250" class="real-letter">C</text>
+    <path fill="url(#platinum)" d="${PACE_LETTER_PATHS.C}" />
   </g>
 
   <g class="char-e">
-    <text x="670" y="250" class="real-letter">E</text>
+    <path fill="url(#platinum)" d="${PACE_LETTER_PATHS.E}" />
   </g>
 
   <g class="p-icon" transform-origin="500 250">
@@ -200,7 +199,8 @@ function generateSvgHtml(reducedMotion: boolean): string {
 }
 
 /**
- * PACE logo splash (artwork from assets/gemini-svg.svg) on #0B0D11 with the coin-travel intro.
+ * PACE logo splash (artwork from assets/gemini-svg.svg) on the app background with the
+ * coin-travel intro.
  * Stays until the app is ready and the logo has been fully formed for 1 s, then fades out.
  */
 export function SplashScreenView({
@@ -258,7 +258,7 @@ export function SplashScreenView({
       pointerEvents={shouldDismiss ? 'none' : 'auto'}
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Paisa Pulse"
+      accessibilityLabel="PACE"
     >
       <View style={[styles.logoContainer, { width: logoWidth, height: logoHeight }]}>
         <WebView

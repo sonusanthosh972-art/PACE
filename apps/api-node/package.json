@@ -1,7 +1,7 @@
 {
   "name": "paisapulse-api-node",
   "version": "1.0.0",
-  "description": "PaisaPulse Node.js Express REST API with MongoDB and Cron",
+  "description": "PACE Node.js Express REST API with MongoDB and Cron",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

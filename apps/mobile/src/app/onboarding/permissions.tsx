@@ -126,7 +126,7 @@ export default function PermissionsStep() {
         <View style={styles.pledgeRow}>
           <Icon name="shield-checkmark" color="accentText" size={24} />
           <View style={styles.flex}>
-            <AppText variant="bodyStrong">The Paisa Pulse Privacy Pledge</AppText>
+            <AppText variant="bodyStrong">The PACE Privacy Pledge</AppText>
             <AppText variant="caption" color="muted">
               {signedIn
                 ? 'No ads. Only messages from banks are read, and their text never leaves this phone. Only amounts, merchants and dates are backed up to your account.'

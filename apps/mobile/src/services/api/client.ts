@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Hosted Paisa Pulse API (Render). Override with EXPO_PUBLIC_API_URL for local development. */
+/** Hosted PACE API (Render). Override with EXPO_PUBLIC_API_URL for local development. */
 export const DEFAULT_API_URL = 'https://paisapulse-apis.onrender.com';
 
 let customBaseUrl: string | null = null;
@@ -190,7 +190,7 @@ function extractFriendlyErrorMessage(statusCode: number, data: unknown): string 
 }
 
 /**
- * Executes an HTTP request against the Paisa Pulse API, automatically attaching auth headers,
+ * Executes an HTTP request against the PACE API, automatically attaching auth headers,
  * handling token refresh, translating errors into user-friendly messages, and validating the
  * response using the provided Zod schema.
  */
@@ -222,7 +222,7 @@ export async function apiClient<T>(
 
   // Release builds never send data over plain HTTP.
   if (!__DEV__ && !url.startsWith('https://')) {
-    throw new ApiError('Insecure server address. Paisa Pulse only connects over HTTPS.', 0, false);
+    throw new ApiError('Insecure server address. PACE only connects over HTTPS.', 0, false);
   }
 
   let response: Response;

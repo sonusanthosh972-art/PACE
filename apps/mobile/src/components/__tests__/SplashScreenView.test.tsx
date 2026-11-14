@@ -1,6 +1,14 @@
 import { act, render, screen } from '@testing-library/react-native';
 
-import { DEFAULT_DWELL_MS, FORMED_MS, SPLASH_TIMING, SplashScreenView } from '../SplashScreenView';
+import { COLORS } from '@/theme/tokens';
+
+import {
+  DEFAULT_DWELL_MS,
+  FORMED_MS,
+  PACE_LETTER_PATHS,
+  SPLASH_TIMING,
+  SplashScreenView,
+} from '../SplashScreenView';
 
 const mockReduced = { value: false };
 jest.mock('@/theme/ThemeProvider', () => ({
@@ -12,7 +20,7 @@ describe('SplashScreenView', () => {
     mockReduced.value = false;
   });
 
-  it('renders only the PACE logo animation against #0B0D11 and omits secondary copy/decorations', async () => {
+  it('renders only the PACE logo animation on the app background and omits secondary copy/decorations', async () => {
     await render(<SplashScreenView ready={false} />);
 
     // Screen and webview are present
@@ -20,25 +28,24 @@ describe('SplashScreenView', () => {
     const webview = screen.getByTestId('splash-logo-webview');
     expect(webview).toBeOnTheScreen();
 
-    // Verify background color is strictly #0B0D11
+    // Same background as the app, so the splash fades into the first screen without a step
     expect(screen.getByTestId('splash-screen-view')).toHaveStyle({
-      backgroundColor: '#0B0D11',
+      backgroundColor: COLORS.bg,
     });
 
     const html = (webview.props as { source: { html: string } }).source.html;
 
-    // Artwork, colours, proportions and background are the SVG's own, unchanged
+    // Artwork, colours and proportions are the SVG's own
     expect(html).toContain('viewBox="0 0 1000 500"');
-    expect(html).toContain('<rect width="1000" height="500" class="bg-rect" />');
     expect(html).toContain('M 452 198 L 478 186 L 478 310 L 452 322 Z');
     expect(html).toContain('<stop offset="50%" stop-color="#10E896" />');
     expect(html).toContain('<stop offset="65%" stop-color="#F1F5F9" />');
-    for (const [char, x] of [
-      ['A', 435],
-      ['C', 555],
-      ['E', 670],
-    ] as const) {
-      expect(html).toContain(`<text x="${x}" y="250" class="real-letter">${char}</text>`);
+    // No pure white in the platinum gradient
+    expect(html).not.toMatch(/#FFFFFF/i);
+    // A, C, E are drawn as Inter outlines, never as <text> that depends on a WebView font
+    expect(html).not.toContain('<text');
+    for (const d of Object.values(PACE_LETTER_PATHS)) {
+      expect(html).toContain(`<path fill="url(#platinum)" d="${d}" />`);
     }
 
     // Coin-travel sequence: P darts in from the right and settles left, then A, C, E slide in

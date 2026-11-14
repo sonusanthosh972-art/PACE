@@ -12,7 +12,7 @@ export const PERMISSION_COPY: Record<
 > = {
   sms: {
     title: 'Automatic bank SMS updates',
-    why: 'Paisa Pulse updates your daily allowance effortlessly by recognizing bank transaction alerts. Personal chats and family messages are completely ignored, and bank OTP messages are discarded immediately.',
+    why: 'PACE updates your daily allowance effortlessly by recognizing bank transaction alerts. Personal chats and family messages are completely ignored, and bank OTP messages are discarded immediately.',
     points: [
       'Strict bank-sender filter: Only verified institutions (e.g. HDFC, SBI, ICICI, Axis) are processed.',
       'Only the spent amount and merchant are stored. SMS body texts are discarded immediately.',

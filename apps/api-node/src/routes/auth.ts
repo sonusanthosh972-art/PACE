@@ -86,7 +86,7 @@ export async function sendVerificationCode(user: Pick<UserDoc, 'id' | 'email'>):
     const code = await issueCode(user.id, 'verify_email');
     await sendMail({
       to: user.email,
-      subject: 'Your Paisa Pulse verification code',
+      subject: 'Your PACE verification code',
       text: `Your verification code is ${code}. It expires in ${minutes} minutes.`,
     });
     return true;
@@ -321,7 +321,7 @@ authRouter.post('/forgot-password', async (req: Request, res: Response): Promise
       const code = await issueCode(user.id, 'reset_password');
       await sendMail({
         to: user.email,
-        subject: 'Reset your Paisa Pulse password',
+        subject: 'Reset your PACE password',
         text:
           `Your password reset code is ${code}. It expires in ${minutes} minutes.\n\n` +
           'If you did not ask for this, you can ignore this email; your password stays the same.',
