@@ -3,14 +3,14 @@
  *
  * All notifications are local (expo-notifications), scheduled on the phone so they work
  * offline with no server. The schedule is recalculated whenever a payment arrives or the
- * app foregrounds, so the 10 pm night summary always has the right numbers.
+ * app foregrounds, so the 9 pm night summary always has the right numbers.
  *
  * Notification types:
  *  1. Morning budget (configurable time, default 8 am)
  *  2. Live payment alert (instant, on each payment)
  *  3. 80% budget warning (at-most once per day)
  *  4. 100% budget warning (at-most once per day)
- *  5. Night summary (configurable time, default 10 pm)
+ *  5. Night summary (configurable time, default 9 pm)
  *  6. Weekly review (Sundays, configurable time, default 7 pm)
  */
 import * as Notifications from 'expo-notifications';
@@ -242,13 +242,16 @@ async function maybeWarn100(
 
 /**
  * The allowance for a day WITHOUT prematurely inserting into `daily_budgets`: today's is stored,
- * past days use what was stored, future days get the fixed daily allowance.
+ * past days use what was stored. Future days of this cycle get the carry-forward projection (the
+ * cycle's money left after today's spending, shared over the days after today); days in the next
+ * cycle get its starting pace. Recalculated after every payment, so the projection stays current.
  */
 async function computeProjectedBudget(
   db: SqlDb,
   profile: BudgetProfile,
   targetDay: DateKey,
   today: DateKey,
+  todaySnapshot: BudgetSnapshot,
   now: number,
 ): Promise<Paise> {
   // If targetDay is today, get or freeze today's actual budget
@@ -265,7 +268,10 @@ async function computeProjectedBudget(
     if (existing) return existing.budget_paise;
   }
 
-  // Future days: the fixed daily allowance (nothing is stored for them yet).
+  // Future days: nothing is stored for them yet.
+  if (targetDay <= todaySnapshot.cycle.end && todaySnapshot.nextDaysAveragePaise !== null) {
+    return todaySnapshot.nextDaysAveragePaise;
+  }
   return dailyAllowance(profile, cycleFor(targetDay, profile.payday));
 }
 
@@ -277,7 +283,7 @@ async function buildMorningInput(
   todaySnapshot: BudgetSnapshot,
   now: number,
 ): Promise<MorningInput> {
-  const budget = await computeProjectedBudget(db, profile, targetDay, today, now);
+  const budget = await computeProjectedBudget(db, profile, targetDay, today, todaySnapshot, now);
   const yesterday = addDays(targetDay, -1);
 
   if (targetDay === today) {
@@ -347,7 +353,7 @@ async function buildNightInput(
   }
 
   // Projected night summary for future days (0 spend projected)
-  const budget = await computeProjectedBudget(db, profile, targetDay, today, now);
+  const budget = await computeProjectedBudget(db, profile, targetDay, today, todaySnapshot, now);
   return {
     budgetPaise: budget,
     spentPaise: 0,

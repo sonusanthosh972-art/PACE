@@ -29,6 +29,9 @@ export function AppText({
   const { colors } = useTheme();
   return (
     <Text
+      // Android's default "highQuality" line breaking measures single lines too narrow on some
+      // phones (e.g. Xiaomi with a custom system font), dropping the last word or letter.
+      textBreakStrategy="simple"
       maxFontSizeMultiplier={maxFontSizeMultiplier ?? (variant === 'hero' ? 1.4 : 2)}
       style={[
         TYPE[variant],

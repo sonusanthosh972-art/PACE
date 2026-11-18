@@ -5,11 +5,14 @@ import { getDb } from '../db/mongo.js';
 import { UserDoc, FixedExpenseDoc, TransactionDoc, DailySummaryDoc, JobLockDoc } from '../db/models.js';
 import {
   addDays,
+  budgetStartInCycle,
   countsAsSpend,
   cycleFor,
-  dailyAllowance,
+  daysLeftInCycle,
   endOfDayMs,
   netSpend,
+  poolForCycle,
+  rollingAllowance,
   startOfDayMs,
   toDateKey,
   type DateKey,
@@ -132,11 +135,15 @@ export async function buildSummaryForUser(user: UserDoc, day: DateKey): Promise<
   const totalFixed = fixedExpenses.reduce((sum, f) => sum + f.amountPaise, 0);
   const spendable = (user.salaryPaise ?? 0) - totalFixed - (user.savingsGoalPaise ?? 0);
 
-  // Only the day itself matters: the allowance is a fixed share of the month.
-  const onDay = await db
+  // Carry-forward: the allowance depends on what was spent in the cycle before the day.
+  const from = budgetStartInCycle(cycle, user.budgetStartDate);
+  const inCycle = await db
     .collection<TransactionDoc>('transactions')
-    .find({ userId: user.id, occurredAt: { $gte: startOfDayMs(day), $lte: endOfDayMs(day) } })
+    .find({ userId: user.id, occurredAt: { $gte: startOfDayMs(from), $lte: endOfDayMs(day) } })
     .toArray();
+  const dayStart = startOfDayMs(day);
+  const onDay = inCycle.filter((t) => t.occurredAt >= dayStart);
+  const spentBefore = from < day ? netSpend(inCycle.filter((t) => t.occurredAt < dayStart)) : 0;
 
   const categorySpend = new Map<string, number>();
   for (const t of onDay.filter(countsAsSpend)) {
@@ -155,7 +162,11 @@ export async function buildSummaryForUser(user: UserDoc, day: DateKey): Promise<
     id: `${user.id}_${day}`,
     userId: user.id,
     dateKey: day,
-    budgetPaise: dailyAllowance(spendable, cycle),
+    budgetPaise: rollingAllowance(
+      poolForCycle(spendable, cycle, user.budgetStartDate),
+      spentBefore,
+      daysLeftInCycle(day, cycle),
+    ),
     spentPaise: netSpend(onDay),
     topCategory,
     calculatedAt: new Date(),

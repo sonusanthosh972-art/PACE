@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppLock } from '@/components/AppLock';
+import { DayCardHost } from '@/components/DayCard';
 import { DeviceSync } from '@/components/DeviceSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NetworkBanner } from '@/components/NetworkBanner';
@@ -79,6 +80,8 @@ function AppShell({ fontsReady }: { fontsReady: boolean }) {
               canPrompt={splashDismissed}
             />
           )}
+          {/* Once-a-day morning and night cards; waits for the splash, the lock and main tabs. */}
+          {ready && <DayCardHost />}
         </>
       )}
       {!splashDismissed && <SplashScreenView ready={ready} onFinish={dismissSplash} />}
@@ -141,6 +144,7 @@ function ThemedStack() {
             contentStyle: { backgroundColor: colors.surface },
           }}
         />
+        <Stack.Screen name="afford" options={{ headerShown: false }} />
         <Stack.Screen name="review" options={{ headerShown: true, title: 'To review' }} />
         <Stack.Screen
           name="settings/budget"

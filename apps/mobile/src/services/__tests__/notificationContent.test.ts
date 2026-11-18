@@ -116,10 +116,13 @@ describe('notificationContent', () => {
       expect(body).toContain('fully used');
     });
 
-    it('never says tomorrow shrinks: the daily allowance is fixed', () => {
+    it('explains carry-forward calmly: an overspend is shared over the days ahead', () => {
+      expect(warn100Body(1_700_00, 1_500_00)).toContain(
+        'The days until payday adjust a little to cover it.',
+      );
+      expect(warn100Body(1_500_00, 1_500_00)).toContain('Your days ahead stay the same.');
       for (const body of [warn100Body(1_700_00, 1_500_00), warn100Body(1_500_00, 1_500_00)]) {
-        expect(body).toContain('Tomorrow starts fresh with your usual ₹1,500');
-        expect(body).not.toMatch(/adjust|pressure/);
+        expect(body).not.toMatch(/starts fresh|pressure|fail/);
       }
     });
   });

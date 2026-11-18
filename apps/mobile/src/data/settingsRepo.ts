@@ -11,7 +11,8 @@ export type TimeOfDay = z.infer<typeof timeOfDay>;
 
 export const settingsSchema = z.object({
   morningTime: timeOfDay.default({ hour: 8, minute: 0 }),
-  nightTime: timeOfDay.default({ hour: 22, minute: 0 }),
+  /** Night summary notification and the in-app night card (around 9 pm). */
+  nightTime: timeOfDay.default({ hour: 21, minute: 0 }),
   weeklyTime: timeOfDay.default({ hour: 19, minute: 0 }),
   notificationsEnabled: z.boolean().default(true),
   liveAlertsEnabled: z.boolean().default(true),
@@ -75,6 +76,15 @@ export async function markOnce(db: SqlDb, key: string, now: number): Promise<boo
     [key, now],
   );
   return res.changes > 0;
+}
+
+/** Whether a once-per-key event has already been recorded (does not record it). */
+export async function hasMark(db: SqlDb, key: string): Promise<boolean> {
+  const row = await db.getFirstAsync<{ key: string }>(
+    'SELECT key FROM notification_log WHERE key = ?',
+    [key],
+  );
+  return row !== null && row !== undefined;
 }
 
 /** Deletes every row of user data on the device ("Delete all my data"). */

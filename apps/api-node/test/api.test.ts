@@ -412,9 +412,9 @@ describe('insights and nightly job', () => {
     assert.equal(today.totalSpendPaise, 700_00);
   });
 
-  it('uses the fixed daily allowance (spendable ÷ days in cycle), like the phone', async () => {
+  it('uses the carry-forward allowance on a prorated pool, like the phone', async () => {
     const { auth, email } = await register();
-    // ₹31,000 spendable over a 31-day October → ₹1,000 every day, including late in the month.
+    // ₹31,000 spendable over a 31-day October, joined on the 28th → ₹4,000 for 4 days.
     await call(
       'PUT',
       '/api/v1/me/profile',
@@ -424,10 +424,23 @@ describe('insights and nightly job', () => {
     const user = await getDb().collection<UserDoc>('users').findOne({ email });
     assert.ok(user);
     assert.equal(user.budgetStartDate, '2026-10-28');
-    const summary = await buildSummaryForUser(user, '2026-10-28');
-    assert.equal(summary.budgetPaise, 1_000_00);
-    // Not ₹31,000 ÷ 3 days left on the 29th.
-    assert.equal((await buildSummaryForUser(user, '2026-10-29')).budgetPaise, 1_000_00);
+    // First day: the usual pace (not ₹31,000 ÷ 4 days left).
+    assert.equal((await buildSummaryForUser(user, '2026-10-28')).budgetPaise, 1_000_00);
+    // Nothing spent on the 28th: its ₹1,000 is shared over the 3 days left.
+    assert.equal((await buildSummaryForUser(user, '2026-10-29')).budgetPaise, 1_333_33);
+
+    // ₹2,500 spent on the 28th (₹1,500 over): the 3 days left share ₹1,500.
+    await call(
+      'POST',
+      '/api/v1/transactions/sync',
+      {
+        transactions: [
+          mobileTx({ id: 'cf1', dedupeHash: '7'.repeat(64), amountPaise: 2_500_00, category: 'shopping', occurredAt: Date.parse('2026-10-28T12:00:00+05:30') }),
+        ],
+      },
+      auth,
+    );
+    assert.equal((await buildSummaryForUser(user, '2026-10-29')).budgetPaise, 500_00);
   });
 
   it('catches up missing days once, and never runs on two instances at the same time', async () => {

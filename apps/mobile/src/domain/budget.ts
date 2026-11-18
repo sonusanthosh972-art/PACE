@@ -132,14 +132,44 @@ export function totalSpend(txs: readonly SpendLike[]): Paise {
 }
 
 /**
- * The fixed allowance for each day of the cycle: (salary − fixed costs − savings) ÷ days in the
- * cycle, rounded to the paisa, never negative. It is the same every day: money not spent on one day
- * does not pile up into later days, and overspending one day does not shrink the next.
+ * The starting pace of a cycle: (salary − fixed costs − savings) ÷ days in the cycle, rounded to the
+ * paisa, never negative. It is the allowance of a cycle's first day; later days carry forward what
+ * was left or overspent (see rollingAllowance).
  */
 export function dailyAllowance(profile: BudgetProfile, cycle: Cycle): Paise {
   const spendable = spendableForCycle(profile);
   if (spendable <= 0) return 0;
   return divideRound(spendable, cycle.totalDays);
+}
+
+/**
+ * Carry-forward allowance for a day: what is left of the cycle's money before the day, shared
+ * equally over the days left (the day included). Money not spent yesterday raises every remaining
+ * day a little; overspending lowers them. Never negative: once the cycle's money is used up, it is 0.
+ * Depends only on spending before the day, so it reads the same at 00:00 and at 14:00.
+ */
+export function rollingAllowance(
+  poolPaise: Paise,
+  spentBeforePaise: Paise,
+  daysLeft: number,
+): Paise {
+  const left = poolPaise - spentBeforePaise;
+  if (left <= 0) return 0;
+  return divideRound(left, Math.max(1, daysLeft));
+}
+
+/**
+ * The new daily average for the days after today if nothing more is spent today: the cycle's money
+ * left after today's spending, shared over the remaining days. Null on the last day of the cycle
+ * (payday is tomorrow).
+ */
+export function nextDaysAverage(
+  poolPaise: Paise,
+  spentThroughTodayPaise: Paise,
+  daysLeft: number,
+): Paise | null {
+  if (daysLeft <= 1) return null;
+  return rollingAllowance(poolPaise, spentThroughTodayPaise, daysLeft - 1);
 }
 
 /** remainingToday = todayBudget − spentToday (negative means overspent). */
@@ -155,14 +185,16 @@ export interface BudgetSnapshot {
   spentTodayPaise: Paise;
   todayBudgetPaise: Paise;
   remainingTodayPaise: Paise;
+  /** Daily average for the days after today if nothing more is spent today; null on payday eve. */
+  nextDaysAveragePaise: Paise | null;
   /** Fraction of today's budget used; > 1 when overspent; 1 when the budget is 0 and anything was spent. */
   usedRatio: number;
 }
 
 /**
  * Full snapshot for a day. `frozenTodayBudgetPaise` is the value stored for the day; when absent
- * it is today's fixed daily allowance. `spendablePaise` is the money for this cycle (prorated when
- * the budget was set up part-way), used for "left until payday".
+ * it is the day's carry-forward allowance. `spendablePaise` is the money for this cycle (prorated
+ * when the budget was set up part-way), used for "left until payday".
  */
 export function snapshotForDay(args: {
   profile: BudgetProfile;
@@ -174,7 +206,9 @@ export function snapshotForDay(args: {
   const cycle = cycleFor(args.today, args.profile.payday);
   const daysLeft = daysLeftInCycle(args.today, cycle);
   const spendablePaise = poolForCycle(args.profile, cycle);
-  const todayBudgetPaise = args.frozenTodayBudgetPaise ?? dailyAllowance(args.profile, cycle);
+  const todayBudgetPaise =
+    args.frozenTodayBudgetPaise ??
+    rollingAllowance(spendablePaise, args.cycleSpendBeforeTodayPaise, daysLeft);
   const usedRatio =
     todayBudgetPaise > 0
       ? args.spentTodayPaise / todayBudgetPaise
@@ -190,6 +224,11 @@ export function snapshotForDay(args: {
     spentTodayPaise: args.spentTodayPaise,
     todayBudgetPaise,
     remainingTodayPaise: remainingToday(todayBudgetPaise, args.spentTodayPaise),
+    nextDaysAveragePaise: nextDaysAverage(
+      spendablePaise,
+      args.cycleSpendBeforeTodayPaise + args.spentTodayPaise,
+      daysLeft,
+    ),
     usedRatio,
   };
 }

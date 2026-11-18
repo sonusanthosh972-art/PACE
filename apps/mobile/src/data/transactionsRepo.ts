@@ -276,6 +276,7 @@ function excludeOnArrival(
 }
 
 export interface ManualEntry {
+  id?: string;
   amountPaise: number;
   category: CategoryId;
   note: string | null;
@@ -285,7 +286,9 @@ export interface ManualEntry {
 }
 
 export async function addManual(db: SqlDb, entry: ManualEntry, clock: Clock): Promise<Transaction> {
-  const id = clock.newId();
+  const id = entry.id ?? clock.newId();
+  const existing = await getById(db, id);
+  if (existing) return existing;
   const now = clock.now();
   const merchant = entry.merchant?.trim() || null;
   const tx = transactionSchema.parse({

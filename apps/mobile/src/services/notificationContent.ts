@@ -60,11 +60,11 @@ export function warn80Body(spentPaise: Paise, budgetPaise: Paise): string {
 
 export function warn100Body(spentPaise: Paise, budgetPaise: Paise): string {
   const over = spentPaise - budgetPaise;
-  // The allowance is fixed, so tomorrow is never smaller because of today: say so, calmly.
+  // Carry-forward: an overspend is shared over the days until payday, so no single day is hit hard.
   if (over > 0) {
-    return `You're ${formatINRWhole(over)} over today's budget. Tomorrow starts fresh with your usual ${formatINRWhole(budgetPaise)}.`;
+    return `You're ${formatINRWhole(over)} over today's ${formatINRWhole(budgetPaise)} budget. The days until payday adjust a little to cover it.`;
   }
-  return `Today's budget is fully used. Tomorrow starts fresh with your usual ${formatINRWhole(budgetPaise)}.`;
+  return `Today's ${formatINRWhole(budgetPaise)} budget is fully used, right on target. Your days ahead stay the same.`;
 }
 
 // ── Night summary ────────────────────────────────────────────────────────────

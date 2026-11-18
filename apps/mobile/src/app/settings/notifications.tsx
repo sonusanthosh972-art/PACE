@@ -23,7 +23,11 @@ const TIMES: { key: TimeKey; title: string; subtitle: string }[] = [
     title: 'Morning budget',
     subtitle: "Today's budget and how yesterday went",
   },
-  { key: 'nightTime', title: 'Night summary', subtitle: 'What you spent and your biggest leak' },
+  {
+    key: 'nightTime',
+    title: 'Night summary',
+    subtitle: "What's left of today, also shown as a card when you open the app",
+  },
   {
     key: 'weeklyTime',
     title: 'Weekly review (Sundays)',

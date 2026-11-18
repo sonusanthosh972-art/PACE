@@ -169,7 +169,7 @@ export function buildPatterns(input: PatternInput): Pattern[] {
         icon: 'sunny-outline',
         tone: 'amber',
         title: 'Some days ran above your allowance.',
-        detail: `${pace} · each new day starts fresh`,
+        detail: `${pace} · the days ahead adjust to cover it`,
       });
     }
   }

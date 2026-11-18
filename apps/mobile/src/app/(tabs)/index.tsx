@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -64,13 +64,27 @@ export default function TodayScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       footer={
         today.data ? (
-          <Button
-            label="Add cash spend"
-            icon="add"
-            pill
-            onPress={() => router.push('/add')}
-            accessibilityHint="Opens a quick form to record a cash payment"
-          />
+          <View style={styles.footerRow}>
+            <View style={styles.footerCol}>
+              <Button
+                label="Can I afford?"
+                icon="calculator-outline"
+                variant="secondary"
+                pill
+                onPress={() => router.push('/afford' as Href)}
+                accessibilityHint="Opens the purchase affordability simulator"
+              />
+            </View>
+            <View style={styles.footerCol}>
+              <Button
+                label="Add cash spend"
+                icon="add"
+                pill
+                onPress={() => router.push('/add')}
+                accessibilityHint="Opens a quick form to record a cash payment"
+              />
+            </View>
+          </View>
         ) : undefined
       }
     >
@@ -138,9 +152,12 @@ function TodayContent({
         </Card>
       ) : null}
       <Reveal order={2}>
-        <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
+        <AffordLauncherCard daysLeft={snapshot.daysLeft} />
       </Reveal>
       <Reveal order={3}>
+        <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
+      </Reveal>
+      <Reveal order={4}>
         <MonthGlance snapshot={snapshot} />
       </Reveal>
     </>
@@ -303,6 +320,36 @@ function StatusCard({ tone, title, body }: { tone: RingTone; title: string; body
         <AppText variant="bodyStrong">{title}</AppText>
         <AppText variant="caption" color="muted">
           {body}
+        </AppText>
+      </View>
+      <Icon name="chevron-forward" size={ICON.md} color="muted" />
+    </PressableScale>
+  );
+}
+
+function AffordLauncherCard({ daysLeft }: { daysLeft: number }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={() => router.push('/afford' as Href)}
+      accessibilityRole="button"
+      accessibilityLabel={`Can I afford this? Simulate a planned purchase. ${daysLeft} days until payday.`}
+      accessibilityHint="Opens the purchase affordability simulator"
+      style={[
+        styles.affordLauncher,
+        {
+          backgroundColor: colors.atmosphere.card,
+          borderColor: colors.atmosphere.cardBorder,
+        },
+      ]}
+    >
+      <View style={[styles.affordIconWrap, { backgroundColor: `${colors.accent}18` }]}>
+        <Icon name="calculator-outline" size={ICON.md} color="accent" />
+      </View>
+      <View style={styles.affordTextCol}>
+        <AppText variant="bodyStrong">Can I afford this?</AppText>
+        <AppText variant="caption" color="muted">
+          Simulate a purchase before spending · {daysLeft} days left
         </AppText>
       </View>
       <Icon name="chevron-forward" size={ICON.md} color="muted" />
@@ -569,4 +616,31 @@ const styles = StyleSheet.create({
   glanceCell: { flex: 1, paddingHorizontal: SPACE.sm, gap: SPACE.xs / 2 },
   glanceUsed: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, flex: 1.2 },
   glanceDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  footerRow: {
+    flexDirection: 'row',
+    gap: SPACE.sm,
+    width: '100%',
+  },
+  footerCol: {
+    flex: 1,
+  },
+  affordLauncher: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.md,
+    padding: SPACE.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  affordIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  affordTextCol: {
+    flex: 1,
+    gap: 2,
+  },
 });

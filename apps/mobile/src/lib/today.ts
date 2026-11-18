@@ -37,7 +37,7 @@ export function statusCopy(args: {
   if (args.tone === 'over') {
     return {
       title: 'A little over today',
-      body: 'Tomorrow starts fresh with the same allowance.',
+      body: 'The days until payday adjust a little to cover it.',
     };
   }
   if (args.tone === 'warn') {

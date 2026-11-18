@@ -1,8 +1,10 @@
 import {
   budgetStartInCycle,
   cycleFor,
-  dailyAllowance,
+  daysLeftInCycle,
   onBudgetStreak,
+  poolForCycle,
+  rollingAllowance,
   snapshotForDay,
   type BudgetProfile,
   type BudgetSnapshot,
@@ -38,27 +40,50 @@ async function spendBetween(db: SqlDb, fromMs: number, toMs: number): Promise<nu
 }
 
 /**
- * Returns the day's allowance, storing it on first access so past days keep the value they were
- * judged against (streaks, yesterday's line) even if the salary is edited later.
+ * A day's carry-forward allowance from the stored transactions: this cycle's money left before the
+ * day, shared over the days left. Each payment is counted once, in the day it happened.
+ */
+export async function computeDayAllowance(
+  db: SqlDb,
+  profile: BudgetProfile,
+  day: DateKey,
+): Promise<number> {
+  const cycle = cycleFor(day, profile.payday);
+  const from = budgetStartInCycle(cycle, profile.startDate);
+  const before = from < day ? await spendBetween(db, startOfDayMs(from), startOfDayMs(day)) : 0;
+  return rollingAllowance(poolForCycle(profile, cycle), before, daysLeftInCycle(day, cycle));
+}
+
+/** Saves the day's allowance, replacing an earlier value for the same day. */
+async function storeBudget(db: SqlDb, day: DateKey, budget: number, now: number): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO daily_budgets (date, budget_paise, computed_at) VALUES (?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET budget_paise = excluded.budget_paise,
+       computed_at = excluded.computed_at`,
+    [day, budget, now],
+  );
+}
+
+/**
+ * Returns the day's allowance. Today's is recalculated on every call (a payment recorded late for
+ * an earlier day still moves it); a past day keeps the value it was judged against (streaks,
+ * yesterday's line), even if the salary is edited later.
  */
 export async function getOrFreezeBudget(
   db: SqlDb,
   profile: BudgetProfile,
-  today: DateKey,
+  day: DateKey,
   now: number,
 ): Promise<number> {
-  const existing = await db.getFirstAsync<{ budget_paise: number }>(
-    'SELECT budget_paise FROM daily_budgets WHERE date = ?',
-    [today],
-  );
-  if (existing) return existing.budget_paise;
-
-  const cycle = cycleFor(today, profile.payday);
-  const budget = dailyAllowance(profile, cycle);
-  await db.runAsync(
-    'INSERT OR IGNORE INTO daily_budgets (date, budget_paise, computed_at) VALUES (?, ?, ?)',
-    [today, budget, now],
-  );
+  if (day < toDateKey(now)) {
+    const existing = await db.getFirstAsync<{ budget_paise: number }>(
+      'SELECT budget_paise FROM daily_budgets WHERE date = ?',
+      [day],
+    );
+    if (existing) return existing.budget_paise;
+  }
+  const budget = await computeDayAllowance(db, profile, day);
+  await storeBudget(db, day, budget, now);
   return budget;
 }
 
@@ -69,18 +94,23 @@ export async function getSnapshot(
 ): Promise<BudgetSnapshot> {
   const today = toDateKey(now);
   const cycle = cycleFor(today, profile.payday);
-  const frozen = await getOrFreezeBudget(db, profile, today, now);
   const todayStart = startOfDayMs(today);
   const [before, spentToday] = await Promise.all([
     spendBetween(db, startOfDayMs(budgetStartInCycle(cycle, profile.startDate)), todayStart),
     spendBetween(db, todayStart, startOfDayMs(addDays(today, 1))),
   ]);
+  const budget = rollingAllowance(
+    poolForCycle(profile, cycle),
+    before,
+    daysLeftInCycle(today, cycle),
+  );
+  await storeBudget(db, today, budget, now);
   return snapshotForDay({
     profile,
     today,
     cycleSpendBeforeTodayPaise: before,
     spentTodayPaise: spentToday,
-    frozenTodayBudgetPaise: frozen,
+    frozenTodayBudgetPaise: budget,
   });
 }
 
@@ -119,8 +149,8 @@ export async function getStreak(db: SqlDb, now: number): Promise<number> {
 }
 
 /**
- * Freezes budgets for past days that have none (e.g. the app was not opened that day), using the
- * same rule as 00:00 would have. Lets streaks and night summaries work after gaps.
+ * Stores allowances for past days that have none (e.g. the app was not opened that day), using the
+ * same carry-forward rule as 00:00 would have. Lets streaks and day cards work after gaps.
  */
 export async function backfillBudgets(
   db: SqlDb,

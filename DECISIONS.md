@@ -198,3 +198,20 @@ The admin app (`apps/admin`, Next.js) calls `/api/v1/admin/*` only from its own 
 `x-admin-key: ADMIN_API_KEY`. The key is never shipped to the browser. Without `ADMIN_API_KEY` the API disables the
 admin endpoints (503) instead of leaving them open. The dashboard shows a banner whenever it falls back to sample
 data, and edits made in the dashboard are labelled "this view only" because the admin API is read-only.
+
+## D31. Carry-forward daily allowance and once-a-day cards
+
+Replaces the fixed allowance of D14. A day's allowance is the cycle's money left before the day (salary − fixed
+expenses − savings, prorated for a cycle joined part-way, minus net spend since the cycle or budget start) ÷ the
+days left including it, never below 0. Unspent money raises every remaining day a little and an overspend is
+shared across them, so no single day is hit hard; nothing carries across payday. Because it depends only on
+spending *before* the day, 00:00 and 14:00 still agree. Today's row in `daily_budgets` is recalculated on every
+read (a payment recorded late for an earlier day moves it); past days keep their stored value. The snapshot also
+gives `nextDaysAveragePaise`: the daily average for the days after today if nothing more is spent today. The
+Node API's daily summary uses the same rule.
+
+The morning card (first open of the day) and night card (from `nightTime`, default 9 pm) are claimed with
+`markOnce('card:<kind>:<date>')` in `notification_log`, so each shows at most once per IST day across restarts and
+racing checks; no migration. They pop up only on the four main tabs, never during add/edit or onboarding, and are
+hidden while the app lock is up (an RN `Modal` would otherwise draw over it). The phone computes the numbers
+locally because the app works without an account; the server mirrors the formula for synced users.

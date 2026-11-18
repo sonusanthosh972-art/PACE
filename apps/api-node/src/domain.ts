@@ -151,10 +151,33 @@ export function daysLeftInCycle(today: DateKey, cycle: Cycle): number {
 }
 
 /**
- * The fixed allowance for each day of the cycle: spendable ÷ days in the cycle, rounded to the
- * paisa, never negative. Same rule as the phone: unspent money does not pile into later days.
+ * The starting pace of a cycle: spendable ÷ days in the cycle, rounded to the paisa, never
+ * negative. Later days carry forward what was left or overspent (see rollingAllowance).
  */
 export function dailyAllowance(spendablePaise: number, cycle: Cycle): number {
   if (spendablePaise <= 0) return 0;
   return Math.round(spendablePaise / cycle.totalDays);
+}
+
+/** First day whose spending counts in the cycle: the budget start when it falls inside it. */
+export function budgetStartInCycle(cycle: Cycle, startDate?: DateKey | null): DateKey {
+  return startDate && startDate > cycle.start && startDate <= cycle.end ? startDate : cycle.start;
+}
+
+/** The cycle's spending money, prorated for a cycle joined part-way (same rule as the phone). */
+export function poolForCycle(spendablePaise: number, cycle: Cycle, startDate?: DateKey | null): number {
+  const from = budgetStartInCycle(cycle, startDate);
+  if (from === cycle.start) return spendablePaise;
+  return Math.round((spendablePaise * (diffDays(from, cycle.end) + 1)) / cycle.totalDays);
+}
+
+/**
+ * Carry-forward allowance (same rule as the phone): the cycle's money left before the day, shared
+ * over the days left including it. Unspent money raises later days, overspending lowers them; never
+ * negative.
+ */
+export function rollingAllowance(poolPaise: number, spentBeforePaise: number, daysLeft: number): number {
+  const left = poolPaise - spentBeforePaise;
+  if (left <= 0) return 0;
+  return Math.round(left / Math.max(1, daysLeft));
 }

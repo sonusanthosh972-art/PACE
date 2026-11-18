@@ -15,8 +15,9 @@ import {
 import {
   budgetStartInCycle,
   cycleFor,
-  dailyAllowance,
+  daysLeftInCycle,
   poolForCycle,
+  rollingAllowance,
   totalSpend,
   type BudgetSnapshot,
 } from '@/domain/budget';
@@ -179,16 +180,23 @@ export function useInsights(offset = 0) {
         [cycle.start, last],
       );
       const budgetByDay = new Map(budgets.map((b) => [b.date, b.budget_paise]));
-      // Days without a stored budget use the cycle's fixed allowance, from the day budgeting began.
-      const allowance = dailyAllowance(profile, cycle);
+      // Days without a stored budget get the carry-forward allowance they would have had, from
+      // the day budgeting began: the cycle's money left before the day ÷ the days left.
+      const poolPaise = poolForCycle(profile, cycle);
       const budgetFrom = budgetStartInCycle(cycle, profile.startDate);
       const days: PatternInput['days'][number][] = [];
+      let spentBefore = 0;
       for (let d = cycle.start; d <= last; d = addDays(d, 1)) {
+        const spentPaise = perDay.get(d) ?? 0;
+        const budgeted = d >= budgetFrom;
         days.push({
           date: d,
-          spentPaise: perDay.get(d) ?? 0,
-          budgetPaise: budgetByDay.get(d) ?? (d >= budgetFrom ? allowance : null),
+          spentPaise,
+          budgetPaise:
+            budgetByDay.get(d) ??
+            (budgeted ? rollingAllowance(poolPaise, spentBefore, daysLeftInCycle(d, cycle)) : null),
         });
+        if (budgeted) spentBefore += spentPaise;
       }
       const lastFinishedDay = inProgress ? addDays(today, -1) : cycle.end;
       const daysWithin = days.filter(
@@ -201,7 +209,6 @@ export function useInsights(offset = 0) {
 
       const byCategory = totalsByCategory(txs);
       const totalSpentPaise = totalSpend(txs);
-      const poolPaise = poolForCycle(profile, cycle);
       return {
         cycleStart: cycle.start,
         cycleEnd: cycle.end,

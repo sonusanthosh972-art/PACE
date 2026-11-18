@@ -25,6 +25,7 @@ import {
   addManual,
   countTransactions,
   deleteTransaction,
+  getById,
   getRules,
   ingestParsed,
   isDeleted,
@@ -166,6 +167,24 @@ describe('manual entry, filters and sync state', () => {
     expect(await countTransactions(db)).toBe(2);
   });
 
+  it('guarantees idempotency when an explicit transaction id is supplied for confirmed simulations', async () => {
+    const simId = 'sim_purchase_fixed_id_123';
+    const entry = {
+      id: simId,
+      amountPaise: 250000,
+      category: 'shopping' as const,
+      note: 'Simulated Purchase',
+      merchant: 'Headphones',
+      occurredAt: T0,
+    };
+    const tx1 = await addManual(db, entry, clock);
+    const tx2 = await addManual(db, entry, clock);
+    expect(tx1.id).toBe(simId);
+    expect(tx2.id).toBe(simId);
+    // Count remains 1, no duplicate deduction
+    expect(await getById(db, simId)).toBeTruthy();
+  });
+
   it('filters by category, mode, date range and search (LIKE-escaped)', async () => {
     await ingestParsed(db, smsAt(ZOMATO_UPI), clock);
     await ingestParsed(db, smsAt(CARD_NO_REF, T0 + 60_000), clock);
@@ -238,7 +257,7 @@ describe('profile + budget', () => {
     expect(profile.fixedExpenses.map((f) => f.name)).toEqual(['Rent', 'EMI']);
   });
 
-  it('freezes the budget for the day: spending today does not change it', async () => {
+  it("today's allowance ignores today's spending and carries yesterday's forward", async () => {
     const profile = await seedProfile();
     const day1 = Date.UTC(2026, 8, 1, 3, 0); // 1 Sep 2026 08:30 IST, a 30-day cycle
     expect(await getOrFreezeBudget(db, profile, '2026-09-01', day1)).toBe(166667);
@@ -258,11 +277,56 @@ describe('profile + budget', () => {
     expect(snap.todayBudgetPaise).toBe(166667);
     expect(snap.remainingTodayPaise).toBe(166667 - 420000);
 
-    // Next day: the same fixed allowance (50000 ÷ 30), whatever was spent on day 1
+    // Next day: ₹4,200 spent on day 1 leaves ₹45,800 for 29 days (carry-forward).
     const day2 = Date.UTC(2026, 8, 2, 3, 0);
     const snap2 = await getSnapshot(db, profile, day2);
-    expect(snap2.todayBudgetPaise).toBe(166667);
+    expect(snap2.todayBudgetPaise).toBe(157931);
     expect(await getStreak(db, day2)).toBe(0); // day 1 was over budget
+    // Day 1 keeps the allowance it was judged against.
+    expect(await getOrFreezeBudget(db, profile, '2026-09-01', day2)).toBe(166667);
+  });
+
+  it('recalculates today when a payment for an earlier day is recorded late', async () => {
+    const profile = await seedProfile();
+    const day2 = Date.UTC(2026, 8, 2, 3, 0);
+    expect((await getSnapshot(db, profile, day2)).todayBudgetPaise).toBe(172414); // ₹50,000 ÷ 29
+    await addManual(
+      db,
+      {
+        amountPaise: 2900_00,
+        category: 'food',
+        note: null,
+        merchant: null,
+        occurredAt: Date.UTC(2026, 8, 1, 14, 0), // yesterday evening, added this morning
+      },
+      clock,
+    );
+    expect((await getSnapshot(db, profile, day2 + 60_000)).todayBudgetPaise).toBe(162414); // ₹47,100 ÷ 29
+  });
+
+  it('counts a bill paid in a fixed category once (it is already set aside), and ignores income', async () => {
+    const profile = await seedProfile();
+    const day1 = Date.UTC(2026, 8, 1, 6, 0);
+    await addManual(
+      db,
+      {
+        amountPaise: 30000_00,
+        category: 'rent_emi',
+        note: null,
+        merchant: 'Rent',
+        occurredAt: day1,
+      },
+      clock,
+    );
+    const income = await addManual(
+      db,
+      { amountPaise: 5000_00, category: 'other', note: null, merchant: null, occurredAt: day1 },
+      clock,
+    );
+    await db.runAsync(`UPDATE transactions SET direction = 'credit' WHERE id = ?`, [income.id]);
+    const day2 = Date.UTC(2026, 8, 2, 6, 0);
+    // Neither the rent payment nor the extra credit moves the allowance: ₹50,000 ÷ 29.
+    expect((await getSnapshot(db, profile, day2)).todayBudgetPaise).toBe(172414);
   });
 
   it('streak counts on-budget days', async () => {
@@ -500,7 +564,7 @@ describe('settings', () => {
     const s = await getSettings(db);
     expect(s.demoMode).toBe(true);
     expect(s.morningTime).toEqual({ hour: 7, minute: 30 });
-    expect(s.nightTime).toEqual({ hour: 22, minute: 0 });
+    expect(s.nightTime).toEqual({ hour: 21, minute: 0 });
   });
 
   it('ignores a theme saved by older versions (the app is dark only now)', async () => {

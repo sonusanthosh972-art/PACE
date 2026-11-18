@@ -30,6 +30,7 @@ import {
   INSIGHT_CYCLES,
   useInsights,
   useProfile,
+  useToday,
   type InsightsData,
 } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -44,6 +45,7 @@ export default function InsightsScreen() {
   return (
     <Screen background={<HeaderBackground />} backgroundScrolls gutter={TAB_GUTTER}>
       <InsightsHeader offset={offset} onChangeOffset={setOffset} />
+      {offset === 0 ? <SafeToSpendCard /> : null}
       {insights.isPending ? (
         <LoadingState label="Loading your money story" />
       ) : insights.isError ? (
@@ -163,6 +165,97 @@ function InsightsHeader({
         </Pressable>
       </Modal>
     </View>
+  );
+}
+
+/* ---------------------------------------------------------------- safe to spend */
+
+/**
+ * The carry-forward numbers for the cycle in progress: what is left of today's allowance, and the
+ * new daily average for the days after today if nothing more is spent today.
+ */
+function SafeToSpendCard() {
+  const { colors } = useTheme();
+  const today = useToday();
+  const snapshot = today.data?.snapshot;
+  if (!snapshot) return null;
+
+  const left = snapshot.remainingTodayPaise;
+  const over = left < 0;
+  const next = snapshot.nextDaysAveragePaise;
+  const days = snapshot.daysLeft - 1;
+
+  return (
+    <Reveal order={0}>
+      <View
+        style={[
+          styles.card,
+          styles.safeWrap,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+        testID="safe-to-spend"
+      >
+        <View style={styles.sectionHead}>
+          <Icon name="wallet-outline" size={ICON.sm} color="accentText" />
+          <AppText variant="bodyStrong" accessibilityRole="header">
+            Safe to spend
+          </AppText>
+        </View>
+        <View style={styles.safeRow}>
+          <View
+            style={styles.safeCell}
+            accessible
+            accessibilityLabel={
+              over
+                ? `${formatINRWhole(-left)} over today's allowance of ${formatINRWhole(snapshot.todayBudgetPaise)}`
+                : `${formatINRWhole(left)} left of today's allowance of ${formatINRWhole(snapshot.todayBudgetPaise)}`
+            }
+          >
+            <Amount
+              paise={over ? -left : left}
+              variant="heading"
+              color={over ? 'amberText' : 'accentText'}
+              animated
+              fit
+            />
+            <AppText variant="caption" color="muted">
+              {over ? 'over today' : 'left today'}
+            </AppText>
+            <AppText variant="caption" color="muted" tabular>
+              of {formatINRWhole(snapshot.todayBudgetPaise)}
+            </AppText>
+          </View>
+          <View style={[styles.vDivider, { backgroundColor: colors.border }]} />
+          <View
+            style={styles.safeCell}
+            accessible
+            accessibilityLabel={
+              next === null
+                ? 'Payday is tomorrow'
+                : `From tomorrow, ${formatINRWhole(next)} a day for ${days} days until payday`
+            }
+          >
+            {next === null ? (
+              <AppText variant="heading">Payday</AppText>
+            ) : (
+              <Amount paise={next} variant="heading" animated fit suffix=" /day" />
+            )}
+            <AppText variant="caption" color="muted">
+              {next === null ? 'is tomorrow' : 'from tomorrow'}
+            </AppText>
+            {next === null ? null : (
+              <AppText variant="caption" color="muted" tabular>
+                for {days} {days === 1 ? 'day' : 'days'}
+              </AppText>
+            )}
+          </View>
+        </View>
+        <AppText variant="caption" color="muted">
+          Bills, EMIs and savings are set aside first. Money you don’t spend carries forward, and an
+          overspend is shared across the days until payday.
+        </AppText>
+      </View>
+    </Reveal>
   );
 }
 
@@ -538,6 +631,9 @@ const styles = StyleSheet.create({
   emptyBody: { maxWidth: 320, marginBottom: SPACE.sm },
 
   content: { gap: SPACE.md },
+  safeWrap: { marginBottom: SPACE.md },
+  safeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  safeCell: { flex: 1, gap: 2 },
   card: { borderRadius: RADIUS.lg, borderWidth: 1, padding: CARD_PAD, gap: SPACE.md },
 
   summaryTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },

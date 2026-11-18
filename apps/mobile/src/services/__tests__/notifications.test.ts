@@ -51,9 +51,12 @@ jest.mock('@/data/profileRepo', () => ({
 
 jest.mock('@/data/budgetRepo', () => ({
   getSnapshot: jest.fn().mockResolvedValue({
+    cycle: { start: '2026-10-01', end: '2026-10-31', totalDays: 31 },
+    daysLeft: 8,
     todayBudgetPaise: 2_500_00,
     spentTodayPaise: 500_00,
     remainingTodayPaise: 2_000_00,
+    nextDaysAveragePaise: 2_785_71,
     usedRatio: 0.2,
   }),
   getOrFreezeBudget: jest.fn().mockResolvedValue(2_500_00),

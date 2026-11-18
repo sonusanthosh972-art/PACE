@@ -105,7 +105,7 @@ describe('buildPatterns', () => {
     }).find((p) => p.id === 'allowance');
     expect(mostlyOver?.badge).toBeUndefined();
     expect(mostlyOver?.title).toBe('Some days ran above your allowance.');
-    expect(mostlyOver?.detail).toContain('each new day starts fresh');
+    expect(mostlyOver?.detail).toContain('the days ahead adjust to cover it');
   });
 
   it('compares with the same stretch of last cycle, gently', () => {

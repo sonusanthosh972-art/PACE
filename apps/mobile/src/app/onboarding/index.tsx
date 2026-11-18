@@ -228,8 +228,8 @@ function TodayPreview({ animate }: { animate: boolean }) {
       </View>
       <View style={styles.previewFoot}>
         <Icon name="leaf-outline" size={14} color="accentText" />
-        <AppText variant="caption" color="muted">
-          Within budget. Tomorrow adjusts on its own.
+        <AppText variant="caption" color="muted" style={styles.flex}>
+          Within budget. What you don&apos;t spend carries forward.
         </AppText>
       </View>
     </View>
