@@ -19,6 +19,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { PressableScale } from '@/components/PressableScale';
 import { Reveal } from '@/components/Reveal';
 import { Screen } from '@/components/Screen';
+import { useAfterTransition } from '@/components/useAfterTransition';
 import { ErrorState, LoadingState } from '@/components/States';
 import { CATEGORIES } from '@/domain/categories';
 import { formatINRWhole } from '@/domain/money';
@@ -41,14 +42,18 @@ const CARD_PAD = SPACE.lg;
 export default function InsightsScreen() {
   const [offset, setOffset] = useState(0);
   const insights = useInsights(offset);
+  // The cards and chart are built after the tab has slid in, not during the slide.
+  const settled = useAfterTransition();
 
   return (
     <Screen background={<HeaderBackground />} backgroundScrolls gutter={TAB_GUTTER}>
       <InsightsHeader offset={offset} onChangeOffset={setOffset} />
       {offset === 0 ? <SafeToSpendCard /> : null}
       {offset === 0 ? <AskAssistantCard /> : null}
-      {insights.isPending ? (
-        <LoadingState label="Loading your money story" />
+      {insights.isPending || !settled ? (
+        settled ? (
+          <LoadingState label="Loading your money story" />
+        ) : null
       ) : insights.isError ? (
         <ErrorState onRetry={() => insights.refetch()} />
       ) : !insights.data || !insights.data.hasData ? (

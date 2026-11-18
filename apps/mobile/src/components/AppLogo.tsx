@@ -12,7 +12,6 @@ import { StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -73,10 +72,11 @@ export function AppLogo({
       glowPulse.value = 1;
       return;
     }
-    glowPulse.value = withRepeat(
-      withSequence(withTiming(1.2, { duration: 2100 }), withTiming(0.95, { duration: 2100 })),
-      -1,
-      true,
+    // One gentle pulse when the logo appears, then still. A repeating pulse kept every screen
+    // redrawing ~60 times a second while idle (D20: no looping animations).
+    glowPulse.value = withSequence(
+      withTiming(1.2, { duration: 2100 }),
+      withTiming(1, { duration: 2100 }),
     );
   }, [animated, reducedMotion, glowPulse]);
 

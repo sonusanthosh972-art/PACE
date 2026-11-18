@@ -95,7 +95,11 @@ function TimeBackgroundComponent({ timeOfDay }: { timeOfDay: TimeOfDay }) {
   );
 }
 
-export const TimeBackground = memo(TimeBackgroundComponent);
+// EXPERIMENT (temporary): header image off to measure idle frames.
+export const TimeBackground = memo(function Off(_p: { timeOfDay: TimeOfDay }) {
+  void TimeBackgroundComponent;
+  return null;
+});
 
 const styles = StyleSheet.create({
   container: {

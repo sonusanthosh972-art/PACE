@@ -16,7 +16,6 @@ import { PressableScale } from '@/components/PressableScale';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { TransactionRow } from '@/components/TransactionRow';
 import type { TxFilter } from '@/data/transactionsRepo';
-import { cycleFor } from '@/domain/budget';
 import { CATEGORIES, PICKABLE_CATEGORIES, type CategoryId } from '@/domain/categories';
 import { addDays, startOfDayMs, toDateKey, type DateKey } from '@/domain/time';
 import type { Mode, Transaction } from '@/domain/transaction';
@@ -24,7 +23,7 @@ import { formatDayLabel, MODE_LABELS } from '@/lib/format';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { useTodayKey } from '@/lib/useTodayKey';
 import { setTransactionExcluded } from '@/services/actions';
-import { invalidateAll, useProfile, useTransactions } from '@/state/queries';
+import { defaultTxFilter, invalidateAll, useProfile, useTransactions } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
 import { FONT, ICON, MIN_TOUCH, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
@@ -77,9 +76,9 @@ export default function TransactionsScreen() {
   // Query once typing pauses, not on every key press.
   const searchQuery = useDebouncedValue(search.trim(), 250);
   const filter = useMemo<TxFilter>(() => {
-    const f: TxFilter = { limit: 2000 };
-    if (range === 'cycle' && profile.data)
-      f.from = startOfDayMs(cycleFor(today, profile.data.payday).start);
+    // Same opening filter as the background prefetch, so a first visit finds its data ready.
+    const f: TxFilter =
+      range === 'cycle' ? defaultTxFilter(today, profile.data?.payday ?? null) : { limit: 2000 };
     if (range === 'week') f.from = startOfDayMs(addDays(today, -6));
     if (mode) f.mode = mode;
     if (category) f.category = category;

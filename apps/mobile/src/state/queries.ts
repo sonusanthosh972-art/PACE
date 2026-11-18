@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { getAppDb } from '@/data/appDb';
@@ -100,6 +100,13 @@ export function useToday() {
   });
 }
 
+/** The Transactions tab's opening filter (this pay cycle), shared with the background prefetch. */
+export function defaultTxFilter(today: DateKey, payday: number | null): TxFilter {
+  const f: TxFilter = { limit: 2000 };
+  if (payday !== null) f.from = startOfDayMs(cycleFor(today, payday).start);
+  return f;
+}
+
 export function useTransactions(filter: TxFilter) {
   return useQuery({
     queryKey: KEYS.transactions(filter),
@@ -143,8 +150,9 @@ export function cycleAtOffset(today: DateKey, payday: number, offset: number) {
   return cycle;
 }
 
-export function useInsights(offset = 0) {
-  return useQuery({
+/** Shared by useInsights and the background prefetch, so both use the same cache entry. */
+export function insightsQuery(offset = 0) {
+  return queryOptions({
     queryKey: [...KEYS.insights, offset],
     staleTime: offset > 0 ? 5 * 60_000 : 30_000,
     queryFn: async (): Promise<InsightsData | null> => {
@@ -244,6 +252,10 @@ export function useInsights(offset = 0) {
   });
 }
 
+export function useInsights(offset = 0) {
+  return useQuery(insightsQuery(offset));
+}
+
 /** How many payments still need a category (shown on the home screen). */
 export function useReviewCount() {
   return useQuery({
@@ -284,4 +296,26 @@ export function invalidateAll(client: QueryClient): Promise<void> {
 export function useInvalidateAll() {
   const client = useQueryClient();
   return useCallback(() => invalidateAll(client), [client]);
+}
+
+/**
+ * Loads the Insights and Transactions data in the background once the app has settled, so the
+ * first visit to those tabs shows content at once instead of a loader swapping to a full page in
+ * the middle of the tab animation. Already-fresh data is not fetched again.
+ */
+export async function prefetchTabData(client: QueryClient): Promise<void> {
+  const profile = await client.fetchQuery({
+    queryKey: KEYS.profile,
+    queryFn: async () => getProfile(await getAppDb()),
+    staleTime: 60_000,
+  });
+  if (!profile) return;
+  await Promise.all([
+    client.prefetchQuery(insightsQuery(0)),
+    client.prefetchQuery({
+      queryKey: KEYS.transactions(defaultTxFilter(toDateKey(Date.now()), profile.payday)),
+      queryFn: async () =>
+        listTransactions(await getAppDb(), defaultTxFilter(toDateKey(Date.now()), profile.payday)),
+    }),
+  ]);
 }
