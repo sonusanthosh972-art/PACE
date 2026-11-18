@@ -1,5 +1,5 @@
 import { Canvas, Path, Skia } from '@shopify/react-native-skia';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -22,7 +22,7 @@ interface BudgetRingProps {
  * Hero ring: remaining vs today's budget. Animates from 0 on open (600 ms spring) and eases to
  * new values when a transaction arrives. Runs on the UI thread (Skia + Reanimated shared value).
  */
-export function BudgetRing({
+export const BudgetRing = memo(function BudgetRing({
   remainingFraction,
   tone,
   size = 260,
@@ -81,7 +81,7 @@ export function BudgetRing({
       </View>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },

@@ -29,7 +29,7 @@ import { MOTION } from '@/theme/tokens';
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 15_000, retry: 1 } },
+  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 });
 
 export default function RootLayout() {
@@ -145,6 +145,7 @@ function ThemedStack() {
           }}
         />
         <Stack.Screen name="afford" options={{ headerShown: false }} />
+        <Stack.Screen name="assistant" options={{ headerShown: false }} />
         <Stack.Screen name="review" options={{ headerShown: true, title: 'To review' }} />
         <Stack.Screen
           name="settings/budget"

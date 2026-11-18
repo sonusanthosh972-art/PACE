@@ -32,7 +32,23 @@ async function loadCycle(userId: string): Promise<{ today: DateKey; cycle: Cycle
   const cycle = cycleFor(today, user.payday ?? 1);
   const txs = await db
     .collection<TransactionDoc>('transactions')
-    .find({ userId, occurredAt: { $gte: startOfDayMs(cycle.start), $lte: endOfDayMs(cycle.end) } })
+    .find(
+      { userId, occurredAt: { $gte: startOfDayMs(cycle.start), $lte: endOfDayMs(cycle.end) } },
+      {
+        projection: {
+          _id: 0,
+          id: 1,
+          userId: 1,
+          amountPaise: 1,
+          direction: 1,
+          category: 1,
+          isExcluded: 1,
+          merchant: 1,
+          merchantNorm: 1,
+          occurredAt: 1,
+        },
+      },
+    )
     .toArray();
   return { today, cycle, txs };
 }

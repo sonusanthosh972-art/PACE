@@ -13,6 +13,7 @@ import {
   netSpend,
   poolForCycle,
   rollingAllowance,
+  spendableFor,
   startOfDayMs,
   toDateKey,
   type DateKey,
@@ -132,8 +133,7 @@ export async function buildSummaryForUser(user: UserDoc, day: DateKey): Promise<
   const cycle = cycleFor(day, user.payday ?? 1);
 
   const fixedExpenses = await db.collection<FixedExpenseDoc>('fixedExpenses').find({ userId: user.id }).toArray();
-  const totalFixed = fixedExpenses.reduce((sum, f) => sum + f.amountPaise, 0);
-  const spendable = (user.salaryPaise ?? 0) - totalFixed - (user.savingsGoalPaise ?? 0);
+  const spendable = spendableFor(user, fixedExpenses);
 
   // Carry-forward: the allowance depends on what was spent in the cycle before the day.
   const from = budgetStartInCycle(cycle, user.budgetStartDate);

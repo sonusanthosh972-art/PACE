@@ -98,6 +98,7 @@ export async function wipeAllLocalData(db: SqlDb): Promise<void> {
       'daily_budgets',
       'settings',
       'notification_log',
+      'assistant_messages',
     ]) {
       await db.runAsync(`DELETE FROM ${table}`, []);
     }

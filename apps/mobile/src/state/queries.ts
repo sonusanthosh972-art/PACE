@@ -53,6 +53,7 @@ export function useSettings() {
   return useQuery({
     queryKey: KEYS.settings,
     queryFn: async () => getSettings(await getAppDb()),
+    staleTime: 60_000,
   });
 }
 
@@ -60,6 +61,7 @@ export function useProfile() {
   return useQuery({
     queryKey: KEYS.profile,
     queryFn: async () => getProfile(await getAppDb()),
+    staleTime: 60_000,
   });
 }
 
@@ -144,6 +146,7 @@ export function cycleAtOffset(today: DateKey, payday: number, offset: number) {
 export function useInsights(offset = 0) {
   return useQuery({
     queryKey: [...KEYS.insights, offset],
+    staleTime: offset > 0 ? 5 * 60_000 : 30_000,
     queryFn: async (): Promise<InsightsData | null> => {
       const db = await getAppDb();
       const profile = await getProfile(db);
@@ -158,7 +161,7 @@ export function useInsights(offset = 0) {
         await listTransactions(db, {
           from: startOfDayMs(previous.start),
           to: startOfDayMs(addDays(last, 1)),
-          limit: 100_000,
+          limit: 5_000,
         })
       ).map(toInsightTx);
       const cycleFrom = startOfDayMs(cycle.start);

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 
@@ -114,7 +114,7 @@ export default function TodayScreen() {
 
 /* ---------------------------------------------------------------- content */
 
-function TodayContent({
+const TodayContent = memo(function TodayContent({
   data,
   importing,
   demoMode,
@@ -162,9 +162,15 @@ function TodayContent({
       </Reveal>
     </>
   );
-}
+});
 
-function HeroCard({ snapshot, tone }: { snapshot: BudgetSnapshot; tone: RingTone }) {
+const HeroCard = memo(function HeroCard({
+  snapshot,
+  tone,
+}: {
+  snapshot: BudgetSnapshot;
+  tone: RingTone;
+}) {
   const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const income = useProfile().data?.monthlySalaryPaise ?? null;
@@ -246,7 +252,7 @@ function HeroCard({ snapshot, tone }: { snapshot: BudgetSnapshot; tone: RingTone
       </View>
     </View>
   );
-}
+});
 
 function HeroStat({
   icon,
@@ -294,7 +300,15 @@ function HeroStat({
   );
 }
 
-function StatusCard({ tone, title, body }: { tone: RingTone; title: string; body: string }) {
+const StatusCard = memo(function StatusCard({
+  tone,
+  title,
+  body,
+}: {
+  tone: RingTone;
+  title: string;
+  body: string;
+}) {
   const { colors } = useTheme();
   const hue = tone === 'over' ? colors.coral : tone === 'warn' ? colors.amber : colors.accent;
   const icon: IconName =
@@ -325,9 +339,9 @@ function StatusCard({ tone, title, body }: { tone: RingTone; title: string; body
       <Icon name="chevron-forward" size={ICON.md} color="muted" />
     </PressableScale>
   );
-}
+});
 
-function AffordLauncherCard({ daysLeft }: { daysLeft: number }) {
+const AffordLauncherCard = memo(function AffordLauncherCard({ daysLeft }: { daysLeft: number }) {
   const { colors } = useTheme();
   return (
     <PressableScale
@@ -355,7 +369,7 @@ function AffordLauncherCard({ daysLeft }: { daysLeft: number }) {
       <Icon name="chevron-forward" size={ICON.md} color="muted" />
     </PressableScale>
   );
-}
+});
 
 function SampleDataBanner() {
   return (
@@ -376,7 +390,7 @@ function SampleDataBanner() {
 
 /* ---------------------------------------------------------------- today's spending */
 
-function TodaySpending({
+const TodaySpending = memo(function TodaySpending({
   transactions,
   spentPaise,
 }: {
@@ -385,8 +399,12 @@ function TodaySpending({
 }) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const tiles = categoryTiles(
-    transactions.map((t) => ({ ...t, merchantDisplay: displayMerchant(t.merchant, t.vpa) })),
+  const tiles = useMemo(
+    () =>
+      categoryTiles(
+        transactions.map((t) => ({ ...t, merchantDisplay: displayMerchant(t.merchant, t.vpa) })),
+      ),
+    [transactions],
   );
   // Five tiles always share the row exactly; labels shrink a little on very narrow phones.
   const tileWidth = Math.floor((width - TAB_GUTTER * 2 - SPACE.sm * 4) / 5);
@@ -455,7 +473,7 @@ function TodaySpending({
       <TodayList transactions={transactions} />
     </View>
   );
-}
+});
 
 /** Today's payments; new ones slide in at the top, rows already on screen do not animate. */
 function TodayList({ transactions }: { transactions: Transaction[] }) {
@@ -486,7 +504,7 @@ function TodayList({ transactions }: { transactions: Transaction[] }) {
 
 /* ---------------------------------------------------------------- this cycle */
 
-function MonthGlance({ snapshot }: { snapshot: BudgetSnapshot }) {
+const MonthGlance = memo(function MonthGlance({ snapshot }: { snapshot: BudgetSnapshot }) {
   const { colors } = useTheme();
   const left = cycleLeft(snapshot);
   const usedRatio = left.poolPaise > 0 ? left.spentPaise / left.poolPaise : 0;
@@ -549,7 +567,7 @@ function MonthGlance({ snapshot }: { snapshot: BudgetSnapshot }) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },

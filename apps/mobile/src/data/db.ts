@@ -130,6 +130,22 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE user_rules ADD COLUMN excludes INTEGER NOT NULL DEFAULT 0;
   CREATE INDEX idx_tx_review ON transactions (needs_review, is_excluded, occurred_at DESC);
   `,
+  /* v7: performance covering indexes for spend calculation, category queries, and sync queues */ `
+  CREATE INDEX IF NOT EXISTS idx_tx_spend_calc ON transactions (occurred_at, is_excluded, direction, category, amount_paise);
+  CREATE INDEX IF NOT EXISTS idx_tx_cat_occurred ON transactions (category, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_tx_sync_updated ON transactions (sync_state, updated_at);
+  CREATE INDEX IF NOT EXISTS idx_del_tx_sync ON deleted_transactions (sync_state, deleted_at);
+  `,
+  /* v8: the Money Assistant conversation, kept only on this phone (the server stores no chat text). */ `
+  CREATE TABLE assistant_messages (
+    id          TEXT PRIMARY KEY NOT NULL,
+    role        TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content     TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('done', 'error')),
+    created_at  INTEGER NOT NULL
+  );
+  CREATE INDEX idx_assistant_created ON assistant_messages (created_at);
+  `,
 ];
 
 export async function migrate(db: SqlDb): Promise<number> {

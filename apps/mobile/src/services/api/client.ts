@@ -309,3 +309,58 @@ export async function apiClient<T>(
 
   return responseData as T;
 }
+
+/**
+ * POSTs JSON and returns the raw response for streaming (server-sent events), with the same
+ * auth header, token refresh, HTTPS rule and friendly errors as apiClient. The caller reads
+ * `response.body`; there is no overall timeout here, so pass a `signal` to cancel.
+ */
+export async function apiStream(
+  endpoint: string,
+  body: unknown,
+  signal: AbortSignal,
+  isRetry = false,
+): Promise<Response> {
+  const url = `${getApiBaseUrl()}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  if (!__DEV__ && !url.startsWith('https://')) {
+    throw new ApiError('Insecure server address. PACE only connects over HTTPS.', 0, false);
+  }
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+    'Content-Type': 'application/json',
+  };
+  const accessToken = await getAccessToken();
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  } catch (err) {
+    if (signal.aborted) throw err;
+    throw new ApiError('Unable to reach server. Please check your connection.', 0, true, err);
+  }
+
+  if (response.status === 401 && !isRetry) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed === REFRESH_UNREACHABLE) {
+      throw new ApiError('Unable to reach server. Please check your connection.', 0, true);
+    }
+    if (refreshed) return apiStream(endpoint, body, signal, true);
+    throw new ApiError('Session expired. Please sign in again.', 401);
+  }
+  if (!response.ok) {
+    let errorJson: unknown = null;
+    try {
+      errorJson = await response.json();
+    } catch {
+      // not JSON
+    }
+    throw new ApiError(
+      extractFriendlyErrorMessage(response.status, errorJson),
+      response.status,
+      false,
+      errorJson,
+    );
+  }
+  return response;
+}

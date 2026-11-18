@@ -16,10 +16,13 @@ import { meRouter } from './routes/me.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { insightsRouter } from './routes/insights.js';
 import { adminRouter } from './routes/admin.js';
+import { createAssistantRouter } from './routes/assistant.js';
 
 export interface RateLimits {
   authPerMinute: number;
   apiPerMinute: number;
+  /** Assistant questions per user per minute; defaults to AI_PER_MINUTE_LIMIT (8). */
+  assistantPerMinute?: number;
 }
 
 export const DEFAULT_RATE_LIMITS: RateLimits = { authPerMinute: 10, apiPerMinute: 100 };
@@ -82,6 +85,7 @@ export function createApp(
   app.use('/api/v1/me', limiter(limits.apiPerMinute), meRouter);
   app.use('/api/v1/transactions', limiter(limits.apiPerMinute), transactionsRouter);
   app.use('/api/v1/insights', limiter(limits.apiPerMinute), insightsRouter);
+  app.use('/api/v1/assistant', limiter(limits.apiPerMinute), createAssistantRouter(limits.assistantPerMinute));
   app.use('/api/v1/admin', limiter(limits.apiPerMinute), requireAdminKey(config.adminApiKey), adminRouter);
 
   app.use(notFound);

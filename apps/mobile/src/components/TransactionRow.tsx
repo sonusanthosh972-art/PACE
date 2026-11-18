@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { CATEGORIES } from '@/domain/categories';
@@ -30,7 +31,11 @@ export function describeTransaction(tx: Transaction): string {
   return parts.join(', ');
 }
 
-export function TransactionRow({ tx, onPress, showTime = true }: Props) {
+export const TransactionRow = memo(function TransactionRow({
+  tx,
+  onPress,
+  showTime = true,
+}: Props) {
   const { colors } = useTheme();
   const category = CATEGORIES[tx.category];
   const credit = tx.direction === 'credit';
@@ -89,7 +94,7 @@ export function TransactionRow({ tx, onPress, showTime = true }: Props) {
       </View>
     </PressableScale>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

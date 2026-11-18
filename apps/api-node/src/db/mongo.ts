@@ -6,7 +6,12 @@ let db: Db | null = null;
 export async function connectDb(mongoUri: string, dbName: string): Promise<Db> {
   if (db) return db;
 
-  client = new MongoClient(mongoUri);
+  client = new MongoClient(mongoUri, {
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    maxIdleTimeMS: 30000,
+    connectTimeoutMS: 5000,
+  });
   await client.connect();
   db = client.db(dbName);
 
@@ -57,8 +62,8 @@ async function initIndexes(database: Db) {
   await database.collection('authCodes').createIndex({ userId: 1, purpose: 1 }, { unique: true, name: 'ux_authCodes_user_purpose' });
   await database.collection('authCodes').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_authCodes_expiresAt' });
 
-  // 2. fixedExpenses: index on userId
-  await database.collection('fixedExpenses').createIndex({ userId: 1 }, { name: 'ix_fixedExpenses_userId' });
+  // 2. fixedExpenses: index on userId and dueDay for sorted retrieval
+  await database.collection('fixedExpenses').createIndex({ userId: 1, dueDay: 1 }, { name: 'ix_fixedExpenses_userId_dueDay' });
 
   // 3. transactions: unique (userId, dedupeHash) - critical idempotency index
   await database.collection('transactions').createIndex(
@@ -66,13 +71,21 @@ async function initIndexes(database: Db) {
     { unique: true, name: 'ux_transactions_userId_dedupeHash' }
   );
   await database.collection('transactions').createIndex(
+    { userId: 1, id: 1 },
+    { unique: true, name: 'ux_transactions_userId_id' }
+  );
+  await database.collection('transactions').createIndex(
     { userId: 1, occurredAt: -1 },
     { name: 'ix_transactions_userId_occurredAt' }
   );
   await database.collection('transactions').createIndex(
-    { userId: 1, category: 1 },
-    { name: 'ix_transactions_userId_category' }
+    { userId: 1, category: 1, occurredAt: -1 },
+    { name: 'ix_transactions_userId_category_occurredAt' }
   );
+
+  // 4. aiUsage: one row per user per day for the assistant quota; old rows expire on their own
+  await database.collection('aiUsage').createIndex({ userId: 1, dateKey: 1 }, { unique: true, name: 'ux_aiUsage_user_day' });
+  await database.collection('aiUsage').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_aiUsage_expiresAt' });
 
   // Admin dashboard lists sort across all users; without these they scan and sort whole collections.
   await database.collection('transactions').createIndex({ occurredAt: -1 }, { name: 'ix_transactions_occurredAt' });

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { getAppDb } from '@/data/appDb';
+import { clearAssistantMessages } from '@/data/assistantRepo';
 import { getSettings, setSetting } from '@/data/settingsRepo';
 import { apiClient, ApiError, onAuthExpired, setApiBaseUrl } from '@/services/api/client';
 import {
@@ -211,6 +212,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const db = await getAppDb();
       await setSetting(db, 'accountEmail', null);
+      // The assistant chat talks about this account's money; it leaves with the account.
+      await clearAssistantMessages(db);
     } catch {
       // Ignore DB write errors
     }

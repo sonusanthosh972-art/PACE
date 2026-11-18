@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
 
 import { formatINR, formatINRWhole, type Paise } from '@/domain/money';
@@ -23,7 +24,7 @@ interface AmountProps {
 }
 
 /** A rupee amount with tabular digits. The accessibility label always carries the final value. */
-export function Amount({
+export const Amount = memo(function Amount({
   paise,
   variant = 'body',
   color = 'text',
@@ -51,4 +52,4 @@ export function Amount({
       {suffix}
     </AppText>
   );
-}
+});

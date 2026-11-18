@@ -56,7 +56,6 @@ export function DeviceSync() {
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         refresh().catch(() => undefined);
-        syncNow().catch(() => undefined);
       }
     });
     const pending = SmsReader.addPendingListener(() => {

@@ -181,3 +181,107 @@ export function rollingAllowance(poolPaise: number, spentBeforePaise: number, da
   if (left <= 0) return 0;
   return Math.round(left / Math.max(1, daysLeft));
 }
+
+/** Monthly spending money: salary minus fixed expenses and the savings goal (same as the phone). */
+export function spendableFor(
+  user: { salaryPaise?: number | null; savingsGoalPaise?: number | null },
+  fixedExpenses: readonly { amountPaise: number }[],
+): number {
+  const totalFixed = fixedExpenses.reduce((sum, f) => sum + f.amountPaise, 0);
+  return (user.salaryPaise ?? 0) - totalFixed - (user.savingsGoalPaise ?? 0);
+}
+
+/** The average a day for the days after today, or null when payday is tomorrow (as the phone). */
+export function nextDaysAverage(poolPaise: number, spentThroughTodayPaise: number, daysLeft: number): number | null {
+  if (daysLeft <= 1) return null;
+  return rollingAllowance(poolPaise, spentThroughTodayPaise, daysLeft - 1);
+}
+
+/** Whether a bill due on `dueDay` falls between today and the cycle end (phone's afford.ts). */
+export function isExpenseUpcomingInCycle(today: DateKey, cycleEnd: DateKey, dueDay: number): boolean {
+  const current = parseDateKey(today);
+  const end = parseDateKey(cycleEnd);
+  if (current.year === end.year && current.month === end.month) {
+    return dueDay >= current.day && dueDay <= end.day;
+  }
+  return dueDay >= current.day || dueDay <= end.day;
+}
+
+export type AffordabilityTier = 'SAFE' | 'CAUTION' | 'NOT_AFFORDABLE';
+
+export interface PurchaseSimulation {
+  purchasePaise: number;
+  tier: AffordabilityTier;
+  cycleBalanceBeforePaise: number;
+  cycleBalanceAfterPaise: number;
+  dailyAverageBeforePaise: number;
+  dailyAverageAfterPaise: number;
+  dailyReductionPercent: number;
+  remainingTodayAfterPaise: number;
+  deficitPaise: number;
+  savingsShortfallPaise: number;
+  billsShortfallPaise: number;
+}
+
+/**
+ * Server copy of the phone's Purchase Simulator tiers (apps/mobile/src/domain/afford.ts,
+ * simulatePurchase): the same thresholds, so the assistant and the simulator never disagree.
+ */
+export function simulatePurchase(args: {
+  purchasePaise: number;
+  poolPaise: number;
+  spentThroughTodayPaise: number;
+  remainingTodayPaise: number;
+  daysLeft: number;
+  savingsGoalPaise: number;
+}): PurchaseSimulation {
+  const { purchasePaise, poolPaise, spentThroughTodayPaise, remainingTodayPaise, savingsGoalPaise } = args;
+  const daysLeft = Math.max(1, args.daysLeft);
+  const cycleBalanceBefore = Math.max(0, poolPaise - spentThroughTodayPaise);
+  const averageBefore =
+    nextDaysAverage(poolPaise, spentThroughTodayPaise, daysLeft) ??
+    (daysLeft > 1 ? Math.round(cycleBalanceBefore / (daysLeft - 1)) : 0);
+
+  const spentAfter = spentThroughTodayPaise + purchasePaise;
+  const cycleBalanceAfter = Math.max(0, poolPaise - spentAfter);
+  const deficit = Math.max(0, spentAfter - poolPaise);
+  const leftForNextDays = poolPaise - spentAfter;
+  const averageAfter = daysLeft > 1 && leftForNextDays > 0 ? Math.round(leftForNextDays / (daysLeft - 1)) : 0;
+  const reductionPercent =
+    averageBefore > 0
+      ? Math.min(100, Math.max(0, Math.round(((averageBefore - averageAfter) / averageBefore) * 100)))
+      : 0;
+
+  let savingsShortfall = 0;
+  let billsShortfall = 0;
+  if (deficit > 0) {
+    savingsShortfall = Math.min(deficit, savingsGoalPaise);
+    billsShortfall = Math.max(0, deficit - savingsGoalPaise);
+  }
+
+  let tier: AffordabilityTier = 'SAFE';
+  if (purchasePaise <= 0) tier = 'SAFE';
+  else if (deficit > 0 || cycleBalanceBefore === 0) tier = 'NOT_AFFORDABLE';
+  else if (
+    reductionPercent >= 30 ||
+    purchasePaise > cycleBalanceBefore * 0.4 ||
+    purchasePaise > Math.max(0, remainingTodayPaise) ||
+    averageAfter < 10000
+  ) {
+    tier = 'CAUTION';
+  }
+
+  return {
+    purchasePaise,
+    tier,
+    cycleBalanceBeforePaise: cycleBalanceBefore,
+    cycleBalanceAfterPaise: cycleBalanceAfter,
+    dailyAverageBeforePaise: averageBefore,
+    dailyAverageAfterPaise: averageAfter,
+    dailyReductionPercent: reductionPercent,
+    remainingTodayAfterPaise: remainingTodayPaise - purchasePaise,
+    deficitPaise: deficit,
+    savingsShortfallPaise: savingsShortfall,
+    billsShortfallPaise: billsShortfall,
+  };
+}

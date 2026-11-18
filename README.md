@@ -52,6 +52,26 @@ Generate secrets with `openssl rand -hex 32`.
 Point the app at the API in **Settings → Account**: either `http://<your Mac's Wi-Fi IP>:5080`
 (`ipconfig getifaddr en0`) or, over USB, run `adb reverse tcp:5080 tcp:5080` and use `http://localhost:5080`.
 
+## Money Assistant (AI)
+
+Insights → **Ask your Money Assistant** answers questions from the user's own numbers. The phone
+calls `POST /api/v1/assistant/chat`; the API builds a compact summary of that user's finances
+(computed with the app's own budget and Purchase Simulator rules) and asks
+[OpenRouter](https://openrouter.ai). It is read-only and needs the user to be signed in.
+
+| Variable (apps/api-node) | Default | Purpose |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | empty = assistant off | Server-side only; never put it in the app |
+| `OPENROUTER_MODEL` | `z-ai/glm-5.3-flash` | Any OpenRouter model id; no app update needed |
+| `AI_MAX_OUTPUT_TOKENS` | `700` | Longest answer |
+| `AI_TIMEOUT_MS` | `45000` | Give up on a slow answer |
+| `AI_PER_MINUTE_LIMIT` | `8` | Questions per user per minute |
+| `AI_DAILY_MESSAGE_LIMIT` | `40` | Questions per user per day |
+| `AI_DAILY_TOKEN_LIMIT` | `150000` | Tokens per user per day |
+
+Chats are stored only on the phone; the server keeps a per-day usage count (no message text).
+See DECISIONS.md D34.
+
 ## Checks
 
 ```bash

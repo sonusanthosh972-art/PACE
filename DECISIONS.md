@@ -215,3 +215,60 @@ The morning card (first open of the day) and night card (from `nightTime`, defau
 racing checks; no migration. They pop up only on the four main tabs, never during add/edit or onboarding, and are
 hidden while the app lock is up (an RN `Modal` would otherwise draw over it). The phone computes the numbers
 locally because the app works without an account; the server mirrors the formula for synced users.
+
+## D32. Performance optimization across storage, queries, components, and API
+
+Optimizes end-to-end responsiveness and resource efficiency while preserving all business rules and designs:
+1. **Asset optimization**: Deleted 4 unreferenced raw PNG assets in `apps/mobile/assets/Bg/` totaling ~6.45 MB, leaving only compressed ~100 KB WebP/JPG dynamic backgrounds (`morning.jpg`, `afternoon.jpg`, `evening.jpg`, `night.jpg`).
+2. **SQLite database indexes**: Added migration v7 introducing covering composite indexes:
+   - `idx_tx_spend_calc` on `(occurred_at, is_excluded, direction, category, amount_paise)` enabling index-only covering scans for `spendBetween` and `dayResults` without accessing row pages.
+   - `idx_tx_cat_occurred` on `(category, occurred_at DESC)` for fast category filtering in `listTransactions`.
+   - `idx_tx_sync_updated` on `(sync_state, updated_at)` and `idx_del_tx_sync` on `(sync_state, deleted_at)` eliminating file sorts in pending sync queues.
+3. **TanStack Query caching**: Increased default `staleTime` to 30s in `_layout.tsx`, 60s for static entities (`profile`, `settings`), and 5 minutes for historical completed cycles (`useInsights(offset > 0)`). Mutations immediately purge caches via `invalidateAll()`.
+4. **UI component memoization**: Memoized `TransactionRow`, `SwipeRow`, `TodayContent`, `HeroCard`, `StatusCard`, `AffordLauncherCard`, `TodaySpending`, and `MonthGlance` using `React.memo`, stable `renderItem` callback, and memoized category breakdown computations.
+5. **MongoDB backend indexing and pooling**: Configured optimal connection pooling (`maxPoolSize: 50, minPoolSize: 5, maxIdleTimeMS: 30000`) and compound indexes for `{ userId: 1, id: 1 }` (unique), `{ userId: 1, category: 1, occurredAt: -1 }`, and `{ userId: 1, dueDay: 1 }`, plus projection pruning on insight queries.
+
+## D33. Second-stage performance profiling, Skia memoization, and animation throttling
+
+1. **Animation frame throttling**: In `useCountUp`, added an early exit when `from === target`. Previously, parent re-renders caused new 400ms `requestAnimationFrame` loops even when numbers were static, flooding the JS event loop with unnecessary setState calls.
+2. **Skia canvas and chart memoization**: Memoized `DonutChart` and `BudgetRing` with `React.memo`, preventing recreation of Skia path builders and GPU pipeline re-evaluations during unrelated updates. In `BreakdownCard`, memoized `slices` with `useMemo` to keep slice references stable across renders.
+3. **Insights hierarchy memoization**: Memoized `InsightsContent`, `SummaryCard`, `BreakdownCard`, `Patterns`, `PatternRow`, `Highlights`, and `SafeToSpendCard` with `React.memo`.
+4. **DeviceSync race condition cleanup**: Removed redundant duplicate `syncNow()` call in `AppState` change listener; `refresh()` already orchestrates `syncNow()` in its `finally` block once ingestion is complete.
+5. **Query plan validation**:
+   - SQLite verified with `EXPLAIN QUERY PLAN`: `spendBetween` confirmed to use `SEARCH transactions USING COVERING INDEX idx_tx_spend_calc`, reading 0 row data pages.
+   - MongoDB verified with `explain('executionStats')`: `ix_transactions_userId_occurredAt`, `ix_transactions_userId_category_occurredAt`, `ix_fixedExpenses_userId_dueDay`, and `ux_transactions_userId_id` confirmed to serve their respective queries with zero in-memory sorting.
+
+## D34. AI Money Assistant through OpenRouter, server-side and read-only
+
+```yaml
+decision:
+  action: apps/api-node (new assistant route + services), apps/mobile (new /assistant screen)
+  reason: answer money questions from the user's real numbers, without exposing an API key
+  evidence: the API already holds synced profile, fixed expenses and payments per user (requireAuth),
+            and mirrors the phone's budget maths in domain.ts
+  risk: medium (new external dependency, cost)
+  allowed_by_contract: true
+```
+
+1. **The key never leaves the server.** The phone calls `POST /api/v1/assistant/chat` with its
+   access token; the API calls OpenRouter with `OPENROUTER_API_KEY`. No key, no assistant
+   (503 "not configured"), and the rest of the API is unaffected.
+2. **Numbers are computed, not generated.** `services/financialContext.ts` builds a compact summary
+   for the signed-in user only (this cycle, last cycle, categories, safe-to-spend, bills, savings,
+   recent payments without notes, VPAs or account numbers) with the same rules as the phone
+   (`rollingAllowance`, `poolForCycle`, the Purchase Simulator tiers). The model is told to quote
+   these figures and label anything else as an estimate. An amount in the question ("₹5,000") is
+   simulated on the server so affordability answers use computed results.
+3. **Read-only.** The assistant has no tools and cannot write anything; it can only suggest.
+4. **Account required.** The data lives on the server only for signed-in users, so the phone syncs
+   first and the screen asks people without an account to sign in. Sample data is never sent.
+5. **Cost controls.** Per-user per-minute rate limit, a daily message and token quota (Mongo
+   `aiUsage`, deleted with the account), one request at a time per user, at most 8 history turns
+   and 1,500 characters per message, capped output tokens, upstream timeout, and the upstream
+   request is cancelled when the phone disconnects.
+6. **Streaming.** Server-sent events over the POST response (`Cache-Control: no-transform` keeps
+   compression from buffering); the phone reads it with Expo's streaming `fetch`.
+7. **Conversations stay on the phone** (SQLite `assistant_messages`, last 100 kept); the server
+   stores no chat text and logs no message content.
+8. **No looping animation (D20):** the "thinking" state is a static indicator; the streamed text is
+   the progress.

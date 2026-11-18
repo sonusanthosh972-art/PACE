@@ -92,3 +92,15 @@ export interface DailySummaryDoc {
   topCategory?: string | null;
   calculatedAt: Date;
 }
+
+/** Assistant usage per user per day (IST), for the daily quota. No message text is stored. */
+export interface AiUsageDoc {
+  userId: string;
+  dateKey: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  updatedAt: Date;
+  /** Removed automatically a few days later (TTL index). */
+  expiresAt: Date;
+}

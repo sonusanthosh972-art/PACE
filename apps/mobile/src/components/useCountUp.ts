@@ -22,6 +22,7 @@ export function useCountUp(
       return;
     }
     const from = fromRef.current;
+    if (from === target) return;
     let frame = 0;
     const start = Date.now();
     const tick = () => {

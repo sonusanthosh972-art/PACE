@@ -2,7 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSharedValue } from 'react-native-reanimated';
@@ -101,139 +101,145 @@ export default function TransactionsScreen() {
 
   // Header, search and filters scroll away with the list, like the Today screen; the city image
   // behind them follows the same scroll.
-  const header = (
-    <View style={styles.top}>
-      <AppHeader
-        page="transactions"
-        title="Your payments"
-        hint="Search, filter, or swipe a payment left to tag it."
-      />
-      {/* 1. Integrated Search Bar */}
-      <View
-        style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
-        <Icon name="search-outline" size={ICON.sm} color="muted" />
-        <TextInput
-          placeholder="Search merchant or note"
-          placeholderTextColor={colors.muted}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-          autoCorrect={false}
-          style={[styles.searchInput, { color: colors.text }]}
-          accessibilityLabel="Search by merchant or note"
+  const header = useMemo(
+    () => (
+      <View style={styles.top}>
+        <AppHeader
+          page="transactions"
+          title="Your payments"
+          hint="Search, filter, or swipe a payment left to tag it."
         />
-        {search.length > 0 ? (
-          <PressableScale
-            onPress={() => setSearch('')}
-            accessibilityLabel="Clear search input"
-            style={styles.clearSearchBtn}
-          >
-            <Icon name="close-circle" size={ICON.md} color="muted" />
-          </PressableScale>
-        ) : null}
-      </View>
-
-      {/* 2. Range Segmented Bar */}
-      <View
-        style={[
-          styles.segmentedBar,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        {RANGES.map((r) => {
-          const isSelected = range === r.value;
-          return (
+        {/* 1. Integrated Search Bar */}
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Icon name="search-outline" size={ICON.sm} color="muted" />
+          <TextInput
+            placeholder="Search merchant or note"
+            placeholderTextColor={colors.muted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            autoCorrect={false}
+            style={[styles.searchInput, { color: colors.text }]}
+            accessibilityLabel="Search by merchant or note"
+          />
+          {search.length > 0 ? (
             <PressableScale
-              key={r.value}
+              onPress={() => setSearch('')}
+              accessibilityLabel="Clear search input"
+              style={styles.clearSearchBtn}
+            >
+              <Icon name="close-circle" size={ICON.md} color="muted" />
+            </PressableScale>
+          ) : null}
+        </View>
+
+        {/* 2. Range Segmented Bar */}
+        <View
+          style={[
+            styles.segmentedBar,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          {RANGES.map((r) => {
+            const isSelected = range === r.value;
+            return (
+              <PressableScale
+                key={r.value}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setRange(r.value);
+                }}
+                style={[
+                  styles.segmentItem,
+                  isSelected && { backgroundColor: colors.elevated, borderColor: colors.accent },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={r.label}
+              >
+                <AppText
+                  variant={isSelected ? 'label' : 'caption'}
+                  color={isSelected ? 'text' : 'muted'}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  {r.label}
+                </AppText>
+              </PressableScale>
+            );
+          })}
+        </View>
+
+        {/* 3. Horizontal Filter Chips (Category & Payment Mode) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chips}
+        >
+          {filtersActive ? (
+            <PressableScale
               onPress={() => {
                 Haptics.selectionAsync().catch(() => undefined);
-                setRange(r.value);
+                resetFilters();
               }}
               style={[
-                styles.segmentItem,
-                isSelected && { backgroundColor: colors.elevated, borderColor: colors.accent },
+                styles.resetChip,
+                {
+                  borderColor: colors.accent,
+                  backgroundColor: withAlpha(colors.accent, 0.08),
+                },
               ]}
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={r.label}
+              accessibilityLabel="Reset all filters"
             >
-              <AppText
-                variant={isSelected ? 'label' : 'caption'}
-                color={isSelected ? 'text' : 'muted'}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-              >
-                {r.label}
+              <Icon name="refresh-outline" size={ICON.sm} color="accentText" />
+              <AppText variant="label" color="accentText">
+                Reset
               </AppText>
             </PressableScale>
-          );
-        })}
+          ) : null}
+
+          <Chip
+            label="Needs a tag"
+            icon="pricetag-outline"
+            tint={colors.amberText}
+            selected={category === 'uncategorised'}
+            onPress={() => setCategory(category === 'uncategorised' ? null : 'uncategorised')}
+          />
+
+          {PICKABLE_CATEGORIES.map((c) => (
+            <Chip
+              key={c.id}
+              label={c.shortLabel}
+              accessibilityLabel={c.label}
+              icon={c.icon as IconName}
+              tint={colors.categories[c.id]}
+              selected={category === c.id}
+              onPress={() => setCategory(category === c.id ? null : c.id)}
+            />
+          ))}
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {MODES.map((m) => (
+            <Chip
+              key={m}
+              label={MODE_LABELS[m]}
+              selected={mode === m}
+              onPress={() => setMode(mode === m ? null : m)}
+            />
+          ))}
+        </ScrollView>
       </View>
-
-      {/* 3. Horizontal Filter Chips (Category & Payment Mode) */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chips}
-      >
-        {filtersActive ? (
-          <PressableScale
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => undefined);
-              resetFilters();
-            }}
-            style={[
-              styles.resetChip,
-              {
-                borderColor: colors.accent,
-                backgroundColor: withAlpha(colors.accent, 0.08),
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Reset all filters"
-          >
-            <Icon name="refresh-outline" size={ICON.sm} color="accentText" />
-            <AppText variant="label" color="accentText">
-              Reset
-            </AppText>
-          </PressableScale>
-        ) : null}
-
-        <Chip
-          label="Needs a tag"
-          icon="pricetag-outline"
-          tint={colors.amberText}
-          selected={category === 'uncategorised'}
-          onPress={() => setCategory(category === 'uncategorised' ? null : 'uncategorised')}
-        />
-
-        {PICKABLE_CATEGORIES.map((c) => (
-          <Chip
-            key={c.id}
-            label={c.shortLabel}
-            accessibilityLabel={c.label}
-            icon={c.icon as IconName}
-            tint={colors.categories[c.id]}
-            selected={category === c.id}
-            onPress={() => setCategory(category === c.id ? null : c.id)}
-          />
-        ))}
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        {MODES.map((m) => (
-          <Chip
-            key={m}
-            label={MODE_LABELS[m]}
-            selected={mode === m}
-            onPress={() => setMode(mode === m ? null : m)}
-          />
-        ))}
-      </ScrollView>
-    </View>
+    ),
+    [colors, search, range, filtersActive, category, mode],
   );
 
   const emptyState = txs.isPending ? (
@@ -254,6 +260,20 @@ export default function TransactionsScreen() {
     />
   );
 
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) =>
+      item.type === 'header' ? (
+        <View style={styles.dayHeaderWrap}>
+          <AppText variant="overline" color="muted" accessibilityRole="header">
+            {item.label}
+          </AppText>
+        </View>
+      ) : (
+        <SwipeRow tx={item.tx} />
+      ),
+    [],
+  );
+
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: colors.bg }]}>
       <HeaderBackground scrollY={scrollY} />
@@ -269,23 +289,13 @@ export default function TransactionsScreen() {
           scrollY.set(e.nativeEvent.contentOffset.y);
         }}
         scrollEventThrottle={16}
-        renderItem={({ item }) =>
-          item.type === 'header' ? (
-            <View style={styles.dayHeaderWrap}>
-              <AppText variant="overline" color="muted" accessibilityRole="header">
-                {item.label}
-              </AppText>
-            </View>
-          ) : (
-            <SwipeRow tx={item.tx} />
-          )
-        }
+        renderItem={renderItem}
       />
     </SafeAreaView>
   );
 }
 
-function SwipeRow({ tx }: { tx: Transaction }) {
+const SwipeRow = memo(function SwipeRow({ tx }: { tx: Transaction }) {
   const { colors } = useTheme();
   const client = useQueryClient();
   const openDetails = () => router.push(`/transaction/${tx.id}`);
@@ -348,7 +358,7 @@ function SwipeRow({ tx }: { tx: Transaction }) {
       </ReanimatedSwipeable>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

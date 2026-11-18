@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -46,6 +46,7 @@ export default function InsightsScreen() {
     <Screen background={<HeaderBackground />} backgroundScrolls gutter={TAB_GUTTER}>
       <InsightsHeader offset={offset} onChangeOffset={setOffset} />
       {offset === 0 ? <SafeToSpendCard /> : null}
+      {offset === 0 ? <AskAssistantCard /> : null}
       {insights.isPending ? (
         <LoadingState label="Loading your money story" />
       ) : insights.isError ? (
@@ -174,7 +175,33 @@ function InsightsHeader({
  * The carry-forward numbers for the cycle in progress: what is left of today's allowance, and the
  * new daily average for the days after today if nothing more is spent today.
  */
-function SafeToSpendCard() {
+/** Entry to the Money Assistant: questions answered from the user's own numbers. */
+const AskAssistantCard = memo(function AskAssistantCard() {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={() => router.push('/assistant')}
+      accessibilityRole="button"
+      accessibilityLabel="Ask the Money Assistant"
+      accessibilityHint="Ask about your spending, savings or a purchase"
+      testID="ask-assistant"
+      style={[styles.askCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <View style={[styles.askIcon, { backgroundColor: withAlpha(colors.accent, 0.16) }]}>
+        <Icon name="sparkles" size={ICON.md} tint={colors.accent} />
+      </View>
+      <View style={styles.askText}>
+        <AppText variant="bodyStrong">Ask your Money Assistant</AppText>
+        <AppText variant="caption" color="muted">
+          Spending, savings or &ldquo;can I afford this?&rdquo;, answered from your numbers.
+        </AppText>
+      </View>
+      <Icon name="chevron-forward" size={ICON.md} color="muted" />
+    </PressableScale>
+  );
+});
+
+const SafeToSpendCard = memo(function SafeToSpendCard() {
   const { colors } = useTheme();
   const today = useToday();
   const snapshot = today.data?.snapshot;
@@ -257,7 +284,7 @@ function SafeToSpendCard() {
       </View>
     </Reveal>
   );
-}
+});
 
 /* ---------------------------------------------------------------- empty */
 
@@ -291,7 +318,7 @@ function StoryEmpty({ past }: { past: boolean }) {
 
 /* ---------------------------------------------------------------- content */
 
-function InsightsContent({ data }: { data: InsightsData }) {
+const InsightsContent = memo(function InsightsContent({ data }: { data: InsightsData }) {
   return (
     <View style={styles.content}>
       <Reveal order={0}>
@@ -310,9 +337,9 @@ function InsightsContent({ data }: { data: InsightsData }) {
       </Reveal>
     </View>
   );
-}
+});
 
-function SummaryCard({ data }: { data: InsightsData }) {
+const SummaryCard = memo(function SummaryCard({ data }: { data: InsightsData }) {
   const { colors } = useTheme();
   const used = data.poolPaise > 0 ? data.totalSpentPaise / data.poolPaise : 0;
   const ofIncome =
@@ -373,9 +400,9 @@ function SummaryCard({ data }: { data: InsightsData }) {
       </View>
     </View>
   );
-}
+});
 
-function BreakdownCard({ data }: { data: InsightsData }) {
+const BreakdownCard = memo(function BreakdownCard({ data }: { data: InsightsData }) {
   const { colors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const inner = width - TAB_GUTTER * 2 - CARD_PAD * 2;
@@ -385,16 +412,22 @@ function BreakdownCard({ data }: { data: InsightsData }) {
   const sliceColor = (row: BreakdownRow) =>
     row.category ? colors.categories[row.category] : colors.muted;
 
+  const slices = useMemo(
+    () =>
+      data.breakdown.map((r) => ({
+        key: r.key,
+        category: r.category,
+        totalPaise: r.totalPaise,
+        color: r.category ? colors.categories[r.category] : colors.muted,
+      })),
+    [data.breakdown, colors.categories, colors.muted],
+  );
+
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={[styles.breakdown, stacked && styles.breakdownStacked]}>
         <DonutChart
-          slices={data.breakdown.map((r) => ({
-            key: r.key,
-            category: r.category,
-            totalPaise: r.totalPaise,
-            color: sliceColor(r),
-          }))}
+          slices={slices}
           totalPaise={data.categoryTotalPaise}
           size={donutSize}
           stroke={Math.round(donutSize * 0.12)}
@@ -440,9 +473,9 @@ function BreakdownCard({ data }: { data: InsightsData }) {
       </View>
     </View>
   );
-}
+});
 
-function Patterns({ patterns }: { patterns: Pattern[] }) {
+const Patterns = memo(function Patterns({ patterns }: { patterns: Pattern[] }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -457,9 +490,9 @@ function Patterns({ patterns }: { patterns: Pattern[] }) {
       ))}
     </View>
   );
-}
+});
 
-function PatternRow({ pattern }: { pattern: Pattern }) {
+const PatternRow = memo(function PatternRow({ pattern }: { pattern: Pattern }) {
   const { colors } = useTheme();
   const tint =
     pattern.tone === 'category' && pattern.category
@@ -517,9 +550,9 @@ function PatternRow({ pattern }: { pattern: Pattern }) {
       <Icon name="chevron-forward" size={ICON.md} color="muted" />
     </PressableScale>
   );
-}
+});
 
-function Highlights({ data }: { data: InsightsData }) {
+const Highlights = memo(function Highlights({ data }: { data: InsightsData }) {
   const { colors } = useTheme();
   const today = useTodayKey();
   const { biggestDay, quietWin } = data;
@@ -582,9 +615,26 @@ function Highlights({ data }: { data: InsightsData }) {
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
+  askCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.md,
+    padding: SPACE.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: MIN_TOUCH + SPACE.lg,
+  },
+  askIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  askText: { flex: 1, gap: 2 },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
   fullWidth: { alignSelf: 'stretch' },

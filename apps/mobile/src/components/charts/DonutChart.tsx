@@ -1,5 +1,5 @@
 import { Canvas, Path, Skia, type SkPath } from '@shopify/react-native-skia';
-import { useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -22,7 +22,7 @@ export interface DonutSlice {
 const GAP_DEG = 2;
 
 /** Category donut. Colour is decorative: the legend next to it carries labels and amounts. */
-export function DonutChart({
+export const DonutChart = memo(function DonutChart({
   slices,
   totalPaise,
   size = 200,
@@ -110,7 +110,7 @@ export function DonutChart({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   center: {

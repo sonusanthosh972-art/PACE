@@ -218,6 +218,7 @@ meRouter.delete('/', async (req: AuthenticatedRequest, res: Response): Promise<v
     db.collection('dailySummaries').deleteMany({ userId }),
     db.collection('sessions').deleteMany({ userId }),
     db.collection('authCodes').deleteMany({ userId }),
+    db.collection('aiUsage').deleteMany({ userId }),
   ]);
 
   const result = await db.collection('users').deleteOne({ id: userId });
