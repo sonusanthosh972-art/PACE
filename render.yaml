@@ -42,6 +42,11 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false # e.g. "PACE <no-reply@yourdomain.com>" on a domain verified in Resend
+      # Google sign-in: the OAuth client ids whose ID tokens are accepted (comma-separated).
+      # Must include the Web client id the app uses (EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID).
+      # Without it, "Continue with Google" fails with "not set up on the server yet".
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
       # AI Money Assistant through OpenRouter. Without the key the assistant is switched off.
       - key: OPENROUTER_API_KEY
         sync: false

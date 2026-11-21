@@ -34,7 +34,8 @@ describe('TransactionRow', () => {
     await render(<TransactionRow tx={tx} onPress={onPress} />);
     expect(screen.getByText('Third Wave Coffee')).toBeOnTheScreen();
     expect(screen.getByText('₹300')).toBeOnTheScreen();
-    expect(screen.getByText(/Coffee & Snacks · UPI · 10:15 am/)).toBeOnTheScreen();
+    // The category shows as the icon; the line underneath is the payment method and time.
+    expect(screen.getByText(/UPI · 10:15 am/)).toBeOnTheScreen();
     const button = screen.getByRole('button', {
       name: 'Spent ₹300, at Third Wave Coffee, Coffee & Snacks, 10:15 am',
     });

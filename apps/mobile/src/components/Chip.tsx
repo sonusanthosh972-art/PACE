@@ -33,19 +33,19 @@ export function Chip({ label, selected, onPress, icon, tint, accessibilityLabel 
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.elevated : 'transparent',
-          borderColor: selected ? colors.accent : colors.border,
+          backgroundColor: selected ? colors.primary : colors.surface,
+          borderColor: selected ? colors.primary : colors.border,
         },
       ]}
     >
       {selected ? (
         <View testID="chip-check">
-          <Icon name="checkmark" size={ICON.sm} color="accentText" />
+          <Icon name="checkmark" size={ICON.sm} tint={colors.onAccent} />
         </View>
       ) : icon ? (
         <Icon name={icon} size={ICON.sm} tint={tint} color="muted" />
       ) : null}
-      <AppText variant="label" color={selected ? 'text' : 'muted'} numberOfLines={1}>
+      <AppText variant="label" color={selected ? 'onAccent' : 'text'} numberOfLines={1}>
         {label}
       </AppText>
     </PressableScale>

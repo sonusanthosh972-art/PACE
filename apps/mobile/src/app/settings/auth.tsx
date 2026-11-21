@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/Button';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { AccountSecurity } from '@/components/account/AccountSecurity';
@@ -398,8 +399,13 @@ export default function AuthScreen() {
 
   return (
     <Screen>
-      <AppText variant="serifTitle">Account & Backup</AppText>
-      <AppText color="muted">
+      <View style={styles.brand}>
+        <BrandLogo size={72} />
+      </View>
+      <AppText variant="serifTitle" center>
+        {mode === 'register' ? 'Create your account' : 'Welcome back'}
+      </AppText>
+      <AppText color="muted" center>
         {mode === 'register'
           ? 'Create your account. Next you set up your budget and allow bank SMS, so everything you see is your real spending.'
           : 'Sign in to continue. Your budget and transactions are restored from your server.'}
@@ -536,6 +542,7 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
+  brand: { alignItems: 'center', marginTop: SPACE.lg, marginBottom: SPACE.sm },
   card: { padding: SPACE.md + 4 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   avatar: {

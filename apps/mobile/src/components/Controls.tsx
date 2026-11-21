@@ -129,7 +129,7 @@ export function ListRow({
         style,
       ]}
     >
-      {icon ? <Icon name={icon} color={danger ? 'coralText' : 'muted'} /> : null}
+      {icon ? <Icon name={icon} size={ICON.lg} color={danger ? 'coralText' : 'muted'} /> : null}
       <View style={styles.listMiddle}>
         <AppText variant="bodyStrong" color={danger ? 'coralText' : 'text'}>
           {title}
@@ -199,7 +199,7 @@ export function RowGroup({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
   const rows = Children.toArray(children).filter(Boolean);
   return (
-    <View>
+    <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {rows.map((row, i) => (
         <Fragment key={i}>
           {i > 0 ? <View style={[styles.rowDivider, { backgroundColor: colors.border }]} /> : null}
@@ -214,7 +214,7 @@ export function RowGroup({ children }: { children: ReactNode }) {
 export function SectionTitle({ children, icon }: { children: string; icon?: IconName }) {
   return (
     <View style={[styles.sectionRow, styles.section]}>
-      {icon ? <Icon name={icon} size={ICON.sm} color="accentText" /> : null}
+      {icon ? <Icon name={icon} size={ICON.sm} color="muted" /> : null}
       <AppText variant="overline" color="muted" accessibilityRole="header">
         {children}
       </AppText>
@@ -293,13 +293,19 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     paddingHorizontal: 0,
   },
+  // Rows sit together in one card, separated by hairlines that start after the icon.
+  group: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: SPACE.lg,
+  },
   rowDivider: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 22 + SPACE.md,
+    marginLeft: ICON.lg + SPACE.md,
   },
   listMiddle: { flex: 1, gap: 2 },
   listValue: { maxWidth: '45%' },
-  section: { marginTop: SPACE.lg, marginBottom: -SPACE.xs },
+  section: { marginTop: SPACE.xl, marginBottom: -SPACE.xs },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   stepHeader: { gap: SPACE.sm, marginBottom: SPACE.md },
   dots: { flexDirection: 'row', gap: 6, marginBottom: SPACE.sm },

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { ReactNode } from 'react';
 import Animated, {
@@ -13,7 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppText } from '@/components/AppText';
-import { PaceLogo } from '@/components/brand/PaceLogo';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
@@ -45,10 +45,9 @@ export default function Welcome() {
   const signedIn = useAuthStore((s) => s.isAuthenticated);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const splashGone = useSplash((s) => s.dismissed);
-  const [introDone, setIntroDone] = useState(false);
-  const onIntroEnd = useCallback(() => setIntroDone(true), []);
-
-  const logoWidth = Math.min(screenWidth - SPACE.xl * 2, 440);
+  // The welcome copy eases in once the launch animation has finished.
+  const introDone = splashGone;
+  const logoSize = Math.min(Math.round(screenWidth * 0.36), 150);
 
   /** Sample data is only ever loaded when the user explicitly asks for it, and never on an account. */
   const tryDemo = async () => {
@@ -116,8 +115,7 @@ export default function Welcome() {
       }
     >
       <View style={styles.hero}>
-        {/* Renders statically formed so the PACE animation doesn't repeat after splash */}
-        <PaceLogo width={logoWidth} staticFormed play={splashGone} onIntroEnd={onIntroEnd} />
+        <BrandLogo size={logoSize} />
       </View>
 
       <Reveal show={introDone} step={0} style={styles.headingBlock}>

@@ -1,6 +1,7 @@
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia';
 import { memo, useEffect, useState } from 'react';
-import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -61,7 +62,9 @@ function TimeBackgroundComponent({ timeOfDay }: { timeOfDay: TimeOfDay }) {
           testID="time-bg-previous"
           source={getTimeBackgroundAsset(previous)}
           style={[styles.previous, imageStyle]}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory"
+          transition={0}
         />
       ) : null}
       <Animated.View style={[StyleSheet.absoluteFill, fadeIn]}>
@@ -69,7 +72,11 @@ function TimeBackgroundComponent({ timeOfDay }: { timeOfDay: TimeOfDay }) {
           testID="time-bg-current"
           source={getTimeBackgroundAsset(shown)}
           style={imageStyle}
-          resizeMode="cover"
+          contentFit="cover"
+          // Every tab shows the same picture: decoded once and shared from memory.
+          cachePolicy="memory"
+          priority="high"
+          transition={0}
         />
       </Animated.View>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.atmosphere.tint }]} />
@@ -87,7 +94,7 @@ function TimeBackgroundComponent({ timeOfDay }: { timeOfDay: TimeOfDay }) {
           <LinearGradient
             start={vec(0, 0)}
             end={vec(0, height * 0.45)}
-            colors={[colors.atmosphere.topShade, 'rgba(8, 10, 14, 0)']}
+            colors={[colors.atmosphere.topShade, 'transparent']}
           />
         </Rect>
       </Canvas>
@@ -95,11 +102,7 @@ function TimeBackgroundComponent({ timeOfDay }: { timeOfDay: TimeOfDay }) {
   );
 }
 
-// EXPERIMENT (temporary): header image off to measure idle frames.
-export const TimeBackground = memo(function Off(_p: { timeOfDay: TimeOfDay }) {
-  void TimeBackgroundComponent;
-  return null;
-});
+export const TimeBackground = memo(TimeBackgroundComponent);
 
 const styles = StyleSheet.create({
   container: {

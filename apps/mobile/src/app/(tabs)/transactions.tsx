@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,14 +25,14 @@ import { useTodayKey } from '@/lib/useTodayKey';
 import { setTransactionExcluded } from '@/services/actions';
 import { defaultTxFilter, invalidateAll, useProfile, useTransactions } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
-import { FONT, ICON, MIN_TOUCH, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
+import { COLORS, FONT, ICON, MIN_TOUCH, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
 type Range = 'cycle' | 'week' | 'all';
 type ListItem =
   { type: 'header'; key: string; label: string } | { type: 'tx'; key: string; tx: Transaction };
 
 const RANGES: { value: Range; label: string }[] = [
-  { value: 'cycle', label: 'This cycle' },
+  { value: 'cycle', label: 'This month' },
   { value: 'week', label: 'Last 7 days' },
   { value: 'all', label: 'All' },
 ];
@@ -89,6 +89,7 @@ export default function TransactionsScreen() {
   const txs = useTransactions(filter);
   const items = useMemo(() => groupByDay(txs.data ?? [], today), [txs.data, today]);
   const filtersActive = Boolean(mode || category || search.trim() || range !== 'cycle');
+  const [pickingRange, setPickingRange] = useState(false);
   const scrollY = useSharedValue(0);
 
   const resetFilters = () => {
@@ -103,11 +104,7 @@ export default function TransactionsScreen() {
   const header = useMemo(
     () => (
       <View style={styles.top}>
-        <AppHeader
-          page="transactions"
-          title="Your payments"
-          hint="Search, filter, or swipe a payment left to tag it."
-        />
+        <AppHeader page="transactions" title="Transactions" hint="Your recent spending" />
         {/* 1. Integrated Search Bar */}
         <View
           style={[
@@ -117,7 +114,7 @@ export default function TransactionsScreen() {
         >
           <Icon name="search-outline" size={ICON.sm} color="muted" />
           <TextInput
-            placeholder="Search merchant or note"
+            placeholder="Search by name or note"
             placeholderTextColor={colors.muted}
             value={search}
             onChangeText={setSearch}
@@ -137,44 +134,6 @@ export default function TransactionsScreen() {
           ) : null}
         </View>
 
-        {/* 2. Range Segmented Bar */}
-        <View
-          style={[
-            styles.segmentedBar,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          {RANGES.map((r) => {
-            const isSelected = range === r.value;
-            return (
-              <PressableScale
-                key={r.value}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => undefined);
-                  setRange(r.value);
-                }}
-                style={[
-                  styles.segmentItem,
-                  isSelected && { backgroundColor: colors.elevated, borderColor: colors.accent },
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={r.label}
-              >
-                <AppText
-                  variant={isSelected ? 'label' : 'caption'}
-                  color={isSelected ? 'text' : 'muted'}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.75}
-                >
-                  {r.label}
-                </AppText>
-              </PressableScale>
-            );
-          })}
-        </View>
-
         {/* 3. Horizontal Filter Chips (Category & Payment Mode) */}
         <ScrollView
           horizontal
@@ -182,6 +141,21 @@ export default function TransactionsScreen() {
           style={styles.chipsScroll}
           contentContainerStyle={styles.chips}
         >
+          <PressableScale
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => undefined);
+              setPickingRange(true);
+            }}
+            style={[styles.rangeChip, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Showing ${RANGES.find((r) => r.value === range)?.label}. Change the time range.`}
+          >
+            <AppText variant="label" style={{ color: colors.onAccent }}>
+              {RANGES.find((r) => r.value === range)?.label}
+            </AppText>
+            <Icon name="chevron-down" size={ICON.sm} tint={colors.onAccent} />
+          </PressableScale>
+
           {filtersActive ? (
             <PressableScale
               onPress={() => {
@@ -263,7 +237,7 @@ export default function TransactionsScreen() {
     ({ item }: { item: ListItem }) =>
       item.type === 'header' ? (
         <View style={styles.dayHeaderWrap}>
-          <AppText variant="overline" color="muted" accessibilityRole="header">
+          <AppText variant="label" color="muted" accessibilityRole="header">
             {item.label}
           </AppText>
         </View>
@@ -290,6 +264,61 @@ export default function TransactionsScreen() {
         scrollEventThrottle={16}
         renderItem={renderItem}
       />
+      <PressableScale
+        onPress={() => router.push('/add')}
+        accessibilityRole="button"
+        accessibilityLabel="Add expense"
+        accessibilityHint="Opens a quick form to record a cash payment"
+        style={[styles.fab, { backgroundColor: colors.primary }]}
+        testID="add-fab"
+      >
+        <Icon name="add" size={28} tint={colors.onAccent} />
+      </PressableScale>
+      <Modal
+        visible={pickingRange}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPickingRange(false)}
+      >
+        <Pressable
+          style={[styles.backdrop, { backgroundColor: colors.scrim }]}
+          onPress={() => setPickingRange(false)}
+          accessibilityLabel="Close"
+        >
+          <View
+            style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Time range"
+          >
+            {RANGES.map((r) => {
+              const selected = r.value === range;
+              return (
+                <PressableScale
+                  key={r.value}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => undefined);
+                    setRange(r.value);
+                    setPickingRange(false);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  accessibilityLabel={r.label}
+                  style={[
+                    styles.menuRow,
+                    selected && { backgroundColor: withAlpha(colors.primary, 0.14) },
+                  ]}
+                >
+                  <AppText variant="bodyStrong" style={styles.flex}>
+                    {r.label}
+                  </AppText>
+                  {selected ? <Icon name="checkmark" size={ICON.md} tint={colors.primary} /> : null}
+                </PressableScale>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -362,7 +391,7 @@ const SwipeRow = memo(function SwipeRow({ tx }: { tx: Transaction }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   // The list supplies the side padding; the header only adds the top space Today has.
-  top: { paddingTop: SPACE.lg, gap: SPACE.sm, paddingBottom: SPACE.xs },
+  top: { paddingTop: SPACE.xl, gap: SPACE.lg, paddingBottom: SPACE.xs },
 
   // Search Bar
   searchBar: {
@@ -386,23 +415,34 @@ const styles = StyleSheet.create({
     marginRight: -SPACE.md,
   },
 
-  // Range Segmented Bar
-  segmentedBar: {
+  flex: { flex: 1 },
+  rangeChip: {
     flexDirection: 'row',
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    padding: SPACE.xs,
+    alignItems: 'center',
     gap: SPACE.xs,
-  },
-  segmentItem: {
-    flex: 1,
     minHeight: 40,
-    paddingHorizontal: SPACE.xs,
-    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACE.lg,
+    borderRadius: RADIUS.pill,
+  },
+  fab: {
+    position: 'absolute',
+    right: TAB_GUTTER,
+    bottom: SPACE.xl,
+    width: 58,
+    height: 58,
+    borderRadius: RADIUS.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    boxShadow: `0 6px 16px ${COLORS.atmosphere.shadow}`,
+  },
+  backdrop: { flex: 1, justifyContent: 'center', padding: SPACE.xl },
+  menu: { borderRadius: RADIUS.lg, borderWidth: 1, padding: SPACE.sm },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: MIN_TOUCH + SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.md,
   },
 
   // Chips
@@ -430,11 +470,12 @@ const styles = StyleSheet.create({
 
   listContent: {
     paddingHorizontal: TAB_GUTTER,
-    paddingBottom: SPACE.xxxl,
+    // Room under the last row for the add button.
+    paddingBottom: SPACE.xxxl + 56,
   },
   dayHeaderWrap: {
-    marginTop: SPACE.md,
-    marginBottom: SPACE.xs,
+    marginTop: SPACE.lg,
+    marginBottom: SPACE.sm,
   },
   rowWrap: {
     marginBottom: SPACE.sm,

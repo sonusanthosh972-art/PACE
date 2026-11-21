@@ -1,13 +1,6 @@
 import { router } from 'expo-router';
-import { memo, useMemo, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type TextStyle,
-} from 'react-native';
+import { memo, useMemo, useState, type ReactNode } from 'react';
+import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Amount } from '@/components/Amount';
@@ -15,11 +8,13 @@ import { HeaderBackground, ON_IMAGE_SHADOW, TAB_GUTTER } from '@/components/AppH
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { DonutChart } from '@/components/charts/DonutChart';
+import { Sparkline } from '@/components/charts/Sparkline';
 import { Icon, type IconName } from '@/components/Icon';
 import { PressableScale } from '@/components/PressableScale';
 import { Reveal } from '@/components/Reveal';
+import { InfoButton } from '@/components/InfoButton';
 import { Screen } from '@/components/Screen';
-import { useAfterTransition } from '@/components/useAfterTransition';
+import { useAfterTransition, useProgressiveCount } from '@/components/useAfterTransition';
 import { ErrorState, LoadingState } from '@/components/States';
 import { CATEGORIES } from '@/domain/categories';
 import { formatINRWhole } from '@/domain/money';
@@ -35,7 +30,7 @@ import {
   type InsightsData,
 } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
-import { ICON, MIN_TOUCH, MOTION, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
+import { COLORS, ICON, MIN_TOUCH, MOTION, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
 const CARD_PAD = SPACE.lg;
 
@@ -48,8 +43,6 @@ export default function InsightsScreen() {
   return (
     <Screen background={<HeaderBackground />} backgroundScrolls gutter={TAB_GUTTER}>
       <InsightsHeader offset={offset} onChangeOffset={setOffset} />
-      {offset === 0 ? <SafeToSpendCard /> : null}
-      {offset === 0 ? <AskAssistantCard /> : null}
       {insights.isPending || !settled ? (
         settled ? (
           <LoadingState label="Loading your money story" />
@@ -57,9 +50,22 @@ export default function InsightsScreen() {
       ) : insights.isError ? (
         <ErrorState onRetry={() => insights.refetch()} />
       ) : !insights.data || !insights.data.hasData ? (
-        <StoryEmpty past={offset > 0} />
+        <>
+          <StoryEmpty past={offset > 0} />
+          {offset === 0 ? <AskAssistantCard /> : null}
+        </>
       ) : (
-        <InsightsContent data={insights.data} />
+        <InsightsContent
+          data={insights.data}
+          middle={
+            offset === 0 ? (
+              <>
+                <SafeToSpendCard />
+                <AskAssistantCard />
+              </>
+            ) : null
+          }
+        />
       )}
     </Screen>
   );
@@ -78,8 +84,6 @@ function InsightsHeader({
   const today = useTodayKey();
   const payday = useProfile().data?.payday ?? null;
   const [picking, setPicking] = useState(false);
-  const onImage: TextStyle = { color: colors.atmosphere.onImage, ...ON_IMAGE_SHADOW };
-  const onImageMuted: TextStyle = { color: colors.atmosphere.onImageMuted, ...ON_IMAGE_SHADOW };
   const cycles =
     payday === null
       ? []
@@ -89,33 +93,32 @@ function InsightsHeader({
   return (
     <View style={styles.header}>
       <View style={styles.titleRow}>
-        <AppText variant="serifTitle" accessibilityRole="header" style={[styles.bigTitle, onImage]}>
-          Insights
-        </AppText>
+        <View style={styles.flex}>
+          <AppText variant="serifTitle" accessibilityRole="header" style={ON_IMAGE_SHADOW}>
+            Insights
+          </AppText>
+          <AppText
+            variant="caption"
+            style={[styles.subtitle, styles.onImageMuted, ON_IMAGE_SHADOW]}
+          >
+            {offset === 0 ? 'How you spent this month' : 'How you spent that month'}
+          </AppText>
+        </View>
         {current ? (
           <PressableScale
             onPress={() => setPicking(true)}
             accessibilityRole="button"
             accessibilityLabel={`Showing ${cycleLabel(current.start)}. Choose another month.`}
-            style={[styles.monthPill, { backgroundColor: colors.atmosphere.chrome }]}
+            style={[
+              styles.monthPill,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
           >
-            <Icon name="calendar-outline" size={ICON.sm} tint={colors.atmosphere.onImage} />
-            <AppText variant="label" style={onImage}>
-              {cycleLabel(current.start)}
-            </AppText>
-            <Icon name="chevron-down" size={ICON.sm} tint={colors.atmosphere.onImageMuted} />
+            <AppText variant="caption">{cycleLabel(current.start)}</AppText>
+            <Icon name="chevron-down" size={ICON.sm} color="muted" />
           </PressableScale>
         ) : null}
       </View>
-      <View style={styles.storyRow}>
-        <Icon name="book-outline" size={ICON.md} tint={colors.accent} />
-        <AppText variant="bodyStrong" style={[{ color: colors.accent }, ON_IMAGE_SHADOW]}>
-          Your Money Story
-        </AppText>
-      </View>
-      <AppText style={onImageMuted}>
-        Tap a pattern to see its payments, or pick another month.
-      </AppText>
 
       <Modal
         visible={picking}
@@ -323,72 +326,97 @@ function StoryEmpty({ past }: { past: boolean }) {
 
 /* ---------------------------------------------------------------- content */
 
-const InsightsContent = memo(function InsightsContent({ data }: { data: InsightsData }) {
+const InsightsContent = memo(function InsightsContent({
+  data,
+  middle,
+}: {
+  data: InsightsData;
+  middle?: ReactNode;
+}) {
+  // One card per frame: the chart, the list and the patterns never mount together in one stall.
+  const shown = useProgressiveCount(5);
   return (
     <View style={styles.content}>
       <Reveal order={0}>
         <SummaryCard data={data} />
       </Reveal>
-      <Reveal order={1}>
-        <BreakdownCard data={data} />
-      </Reveal>
-      {data.patterns.length > 0 ? (
+      {shown >= 2 ? (
+        <Reveal order={1}>
+          <BreakdownCard data={data} />
+        </Reveal>
+      ) : null}
+      {shown >= 3 ? middle : null}
+      {shown >= 4 && data.patterns.length > 0 ? (
         <Reveal order={2}>
           <Patterns patterns={data.patterns} />
         </Reveal>
       ) : null}
-      <Reveal order={3}>
-        <Highlights data={data} />
-      </Reveal>
+      {shown >= 5 ? (
+        <Reveal order={3}>
+          <Highlights data={data} />
+        </Reveal>
+      ) : null}
     </View>
   );
 });
 
 const SummaryCard = memo(function SummaryCard({ data }: { data: InsightsData }) {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   const used = data.poolPaise > 0 ? data.totalSpentPaise / data.poolPaise : 0;
-  const ofIncome =
-    data.incomePaise > 0 ? Math.round((data.totalSpentPaise / data.incomePaise) * 100) : null;
   const barColor = used > 1 ? colors.coral : used >= 0.8 ? colors.amber : colors.accent;
+  // Change against the same number of days last cycle; lower spending is good (green).
+  const change =
+    data.previousSpentPaise > 0
+      ? Math.round(
+          ((data.totalSpentPaise - data.previousSpentPaise) / data.previousSpentPaise) * 100,
+        )
+      : null;
+  const better = change !== null && change <= 0;
+  const sparkWidth = Math.round(Math.min(140, (width - TAB_GUTTER * 2) * 0.36));
 
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.atmosphere.card, borderColor: colors.atmosphere.cardBorder },
-      ]}
-    >
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.summaryTop}>
         <View style={styles.flex}>
+          <View style={styles.titleWithInfo}>
+            <AppText variant="label" color="muted">
+              Total spent
+            </AppText>
+            <InfoButton topic="totalSpent" />
+          </View>
           <Amount
             paise={data.totalSpentPaise}
             variant="title"
             animated
             fit
-            style={[styles.summaryAmount, colors.atmosphere.heroAmount]}
+            style={colors.atmosphere.heroAmount}
           />
-          <AppText color="muted">
-            {data.inProgress ? 'spent this cycle' : `spent in ${data.label}`}
-          </AppText>
-          {ofIncome !== null ? (
-            <AppText variant="caption" color="muted" tabular>
-              {ofIncome}% of {formatINRWhole(data.incomePaise)} income
-            </AppText>
-          ) : null}
         </View>
-        <View style={[styles.vDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.remaining}>
-          <View style={[styles.iconTile, { backgroundColor: withAlpha(colors.accent, 0.14) }]}>
-            <Icon name="speedometer-outline" size={ICON.md} tint={colors.accent} />
-          </View>
-          <View style={styles.shrink}>
-            <Amount paise={data.remainingPaise} variant="bodyStrong" animated fit />
-            <AppText variant="caption" color="muted" numberOfLines={1}>
-              {data.inProgress ? 'remaining' : 'left unspent'}
-            </AppText>
-          </View>
-        </View>
+        <Sparkline values={data.dailySpentPaise} width={sparkWidth} height={56} />
       </View>
+      {change !== null ? (
+        <View style={styles.changeRow}>
+          <View
+            style={[
+              styles.changeBadge,
+              { backgroundColor: withAlpha(better ? colors.accent : colors.coral, 0.16) },
+            ]}
+          >
+            <Icon
+              name={better ? 'arrow-down' : 'arrow-up'}
+              size={12}
+              color={better ? 'accentText' : 'coralText'}
+            />
+            <AppText variant="caption" color={better ? 'accentText' : 'coralText'} tabular>
+              {Math.abs(change)}%
+            </AppText>
+          </View>
+          <AppText variant="caption" color="muted">
+            than last month, same days
+          </AppText>
+        </View>
+      ) : null}
       <View
         style={[styles.bar, { backgroundColor: colors.track }]}
         accessible
@@ -403,17 +431,26 @@ const SummaryCard = memo(function SummaryCard({ data }: { data: InsightsData }) 
           ]}
         />
       </View>
+      <View style={styles.summaryFoot}>
+        <AppText variant="caption" color="muted" tabular>
+          {formatINRWhole(data.remainingPaise)}{' '}
+          {data.inProgress ? 'left this month' : 'left unspent'}
+        </AppText>
+        {data.incomePaise > 0 ? (
+          <AppText variant="caption" color="muted" tabular>
+            {Math.round((data.totalSpentPaise / data.incomePaise) * 100)}% of income
+          </AppText>
+        ) : null}
+      </View>
     </View>
   );
 });
 
 const BreakdownCard = memo(function BreakdownCard({ data }: { data: InsightsData }) {
   const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const inner = width - TAB_GUTTER * 2 - CARD_PAD * 2;
-  // Side by side on most phones; stacked on narrow screens or with large system text.
-  const stacked = inner < 300 || fontScale > 1.3;
-  const donutSize = stacked ? 150 : Math.round(Math.min(132, inner * 0.38));
+  const donutSize = Math.round(Math.min(168, inner * 0.55));
   const sliceColor = (row: BreakdownRow) =>
     row.category ? colors.categories[row.category] : colors.muted;
 
@@ -430,51 +467,38 @@ const BreakdownCard = memo(function BreakdownCard({ data }: { data: InsightsData
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.breakdown, stacked && styles.breakdownStacked]}>
+      <AppText variant="bodyStrong" accessibilityRole="header">
+        Spending by category
+      </AppText>
+      <View style={styles.donutWrap}>
         <DonutChart
           slices={slices}
           totalPaise={data.categoryTotalPaise}
           size={donutSize}
-          stroke={Math.round(donutSize * 0.12)}
-          centerLabel="Total spent"
+          stroke={Math.round(donutSize * 0.14)}
+          centerLabel="Spent"
         />
-        <View style={[styles.flex, stacked && styles.fullWidth]}>
-          <AppText variant="bodyStrong" accessibilityRole="header" style={styles.breakdownTitle}>
-            Where your money went
-          </AppText>
-          {data.breakdown.map((r) => (
-            <View
-              key={r.key}
-              style={styles.legendRow}
-              accessible
-              accessibilityLabel={`${r.category ? CATEGORIES[r.category].label : 'Others'}: ${formatINRWhole(r.totalPaise)}, ${r.pct} percent`}
-            >
-              <View style={[styles.dot, { backgroundColor: sliceColor(r) }]} />
-              <AppText
-                variant="caption"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                style={styles.flex}
-              >
-                {r.label}
-              </AppText>
-              <AppText variant="caption" color="muted" tabular style={styles.legendPct}>
-                {r.pct}%
-              </AppText>
-              <AppText
-                variant="caption"
-                tabular
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={styles.legendAmount}
-              >
-                {formatINRWhole(r.totalPaise)}
-              </AppText>
-            </View>
-          ))}
-        </View>
+      </View>
+      <View style={styles.legend}>
+        {data.breakdown.map((r) => (
+          <View
+            key={r.key}
+            style={styles.legendRow}
+            accessible
+            accessibilityLabel={`${r.category ? CATEGORIES[r.category].label : 'Others'}: ${formatINRWhole(r.totalPaise)}, ${r.pct} percent`}
+          >
+            <View style={[styles.dot, { backgroundColor: sliceColor(r) }]} />
+            <AppText numberOfLines={1} style={styles.flex}>
+              {r.label}
+            </AppText>
+            <AppText color="muted" tabular style={styles.legendPct}>
+              {r.pct}%
+            </AppText>
+            <AppText tabular numberOfLines={1} style={styles.legendAmount}>
+              {formatINRWhole(r.totalPaise)}
+            </AppText>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -604,7 +628,7 @@ const Highlights = memo(function Highlights({ data }: { data: InsightsData }) {
           accessibilityLabel={`A quiet win: ${quietWin.before}${quietWin.strong}${quietWin.after}`}
         >
           <View style={styles.sectionHead}>
-            <Icon name="trophy-outline" size={ICON.sm} tint={colors.amber} />
+            <Icon name="trophy-outline" size={ICON.sm} tint={colors.accent} />
             <AppText variant="caption" numberOfLines={1} style={styles.shrink}>
               A quiet win
             </AppText>
@@ -644,7 +668,9 @@ const styles = StyleSheet.create({
   shrink: { flexShrink: 1 },
   fullWidth: { alignSelf: 'stretch' },
 
-  header: { gap: SPACE.xs, marginBottom: SPACE.sm },
+  header: { gap: SPACE.xs, marginBottom: SPACE.xs },
+  subtitle: { fontSize: 14, lineHeight: 20, marginTop: SPACE.xs },
+  onImageMuted: { color: COLORS.atmosphere.onImageMuted },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,7 +684,8 @@ const styles = StyleSheet.create({
     gap: SPACE.xs,
     minHeight: MIN_TOUCH - SPACE.sm,
     paddingHorizontal: SPACE.md,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   storyRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
 
@@ -685,11 +712,29 @@ const styles = StyleSheet.create({
   },
   emptyBody: { maxWidth: 320, marginBottom: SPACE.sm },
 
-  content: { gap: SPACE.md },
-  safeWrap: { marginBottom: SPACE.md },
+  content: { gap: SPACE.lg },
+  safeWrap: {},
   safeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   safeCell: { flex: 1, gap: 2 },
-  card: { borderRadius: RADIUS.lg, borderWidth: 1, padding: CARD_PAD, gap: SPACE.md },
+  card: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: CARD_PAD + 4,
+    gap: SPACE.md,
+  },
+  titleWithInfo: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  changeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.pill,
+  },
+  summaryFoot: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACE.md },
+  donutWrap: { alignItems: 'center', paddingVertical: SPACE.sm },
+  legend: { gap: SPACE.xs },
 
   summaryTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   summaryAmount: { fontSize: 30, lineHeight: 38 },
@@ -708,10 +753,10 @@ const styles = StyleSheet.create({
   breakdown: { flexDirection: 'row', alignItems: 'center', gap: SPACE.lg },
   breakdownStacked: { flexDirection: 'column' },
   breakdownTitle: { marginBottom: SPACE.xs },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, minHeight: 26 },
-  dot: { width: 8, height: 8, borderRadius: RADIUS.pill },
-  legendPct: { minWidth: 34, textAlign: 'right' },
-  legendAmount: { minWidth: 58, textAlign: 'right' },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, minHeight: 34 },
+  dot: { width: 10, height: 10, borderRadius: RADIUS.pill },
+  legendPct: { minWidth: 44, textAlign: 'right' },
+  legendAmount: { minWidth: 72, textAlign: 'right' },
 
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   pattern: {

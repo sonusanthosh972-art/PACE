@@ -65,7 +65,7 @@ export function TabBar({ state, descriptors, navigation, insets }: BottomTabBarP
               styles.highlight,
               {
                 width: itemWidth - PILL_INSET * 2,
-                backgroundColor: withAlpha(colors.accent, 0.14),
+                backgroundColor: withAlpha(colors.primary, 0.16),
               },
               slide,
             ]}
@@ -77,7 +77,7 @@ export function TabBar({ state, descriptors, navigation, insets }: BottomTabBarP
           const page = isTabPage(route.name) ? TAB_PAGES[route.name] : null;
           const label = options?.title ?? page?.label ?? route.name;
           const focused = state.index === index;
-          const tint = focused ? colors.accentText : colors.muted;
+          const tint = focused ? colors.primary : colors.muted;
 
           const onPress = () => {
             const event = navigation.emit({

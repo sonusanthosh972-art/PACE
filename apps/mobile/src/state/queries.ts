@@ -127,6 +127,10 @@ export interface InsightsData {
   poolPaise: number;
   remainingPaise: number;
   incomePaise: number;
+  /** Spend over the same number of days in the previous cycle (already used by the patterns). */
+  previousSpentPaise: number;
+  /** Spend per day from the cycle start to the last day shown, for the small trend line. */
+  dailySpentPaise: number[];
   breakdown: BreakdownRow[];
   /** Σ spend by category before refunds: the base for the breakdown percentages. */
   categoryTotalPaise: number;
@@ -229,6 +233,8 @@ export function insightsQuery(offset = 0) {
         poolPaise,
         remainingPaise: Math.max(0, poolPaise - totalSpentPaise),
         incomePaise: profile.monthlySalaryPaise,
+        previousSpentPaise: totalSpend(prevTxs),
+        dailySpentPaise: days.map((d) => d.spentPaise),
         breakdown: breakdown(byCategory),
         categoryTotalPaise: byCategory.reduce((s, c) => s + c.totalPaise, 0),
         patterns: buildPatterns({

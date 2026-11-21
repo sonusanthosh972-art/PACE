@@ -38,7 +38,8 @@ export function Button({
 
   const palette = {
     primary: { bg: colors.accentFill, fg: 'onAccent' as const, border: colors.accentFill },
-    secondary: { bg: colors.elevated, fg: 'text' as const, border: colors.border },
+    // Outlined on the page background, as in the design reference.
+    secondary: { bg: 'transparent', fg: 'text' as const, border: colors.border },
     ghost: { bg: 'transparent', fg: 'accentText' as const, border: 'transparent' },
     danger: { bg: colors.elevated, fg: 'coralText' as const, border: colors.coral },
   }[variant];

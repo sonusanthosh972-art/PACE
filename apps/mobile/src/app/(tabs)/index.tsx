@@ -11,20 +11,24 @@ import { BudgetRing } from '@/components/BudgetRing';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Icon, type IconName } from '@/components/Icon';
+import { InfoButton, type InfoTopic } from '@/components/InfoButton';
 import { PaceLoader } from '@/components/PaceLoader';
 import { PressableScale } from '@/components/PressableScale';
 import { Reveal } from '@/components/Reveal';
 import { Screen } from '@/components/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { TransactionRow } from '@/components/TransactionRow';
+import { useAfterTransition } from '@/components/useAfterTransition';
+import { getUpcomingBills } from '@/domain/afford';
 import { cycleLeft, type BudgetSnapshot } from '@/domain/budget';
 import { CATEGORIES } from '@/domain/categories';
 import { categoryTiles } from '@/domain/insights';
 import { displayMerchant } from '@/domain/merchant';
 import { formatINRWhole } from '@/domain/money';
 import { getGreetingTitle } from '@/domain/timeOfDay';
+import type { DateKey } from '@/domain/time';
 import type { Transaction } from '@/domain/transaction';
-import { formatShortDate } from '@/lib/format';
+import { formatShortDate, ordinal } from '@/lib/format';
 import { ringTone, statusCopy, yesterdayLine, type RingTone } from '@/lib/today';
 import { useTimeOfDay } from '@/lib/useTimeOfDay';
 import { refreshFromDevice } from '@/services/bootstrap';
@@ -67,21 +71,19 @@ export default function TodayScreen() {
           <View style={styles.footerRow}>
             <View style={styles.footerCol}>
               <Button
-                label="Can I afford?"
-                icon="calculator-outline"
-                variant="secondary"
-                pill
-                onPress={() => router.push('/afford' as Href)}
-                accessibilityHint="Opens the purchase affordability simulator"
+                label="Add expense"
+                icon="add"
+                onPress={() => router.push('/add')}
+                accessibilityHint="Opens a quick form to record a cash payment"
               />
             </View>
             <View style={styles.footerCol}>
               <Button
-                label="Add cash spend"
-                icon="add"
-                pill
-                onPress={() => router.push('/add')}
-                accessibilityHint="Opens a quick form to record a cash payment"
+                label="Can I afford?"
+                icon="calculator-outline"
+                variant="secondary"
+                onPress={() => router.push('/afford' as Href)}
+                accessibilityHint="Opens the purchase affordability simulator"
               />
             </View>
           </View>
@@ -91,7 +93,11 @@ export default function TodayScreen() {
       <AppHeader
         page="index"
         title={`${getGreetingTitle(timeOfDay, userName)} 👋`}
-        hint="See what's safe to spend today, and add cash in one tap."
+        hint={
+          today.data
+            ? `${weekdayDate(today.data.today)} · Pay cycle ${formatShortDate(today.data.snapshot.cycle.start)} – ${formatShortDate(today.data.snapshot.cycle.end)}`
+            : "Here's your money at a glance."
+        }
       />
       {today.isPending ? (
         <LoadingState label="Loading today's budget" />
@@ -132,6 +138,9 @@ const TodayContent = memo(function TodayContent({
     streak,
     yesterday: yesterdayLine(data.yesterday),
   });
+  // Today's amount and status draw first; the sections below the fold are built a moment later,
+  // so the number people open the app for appears as soon as possible.
+  const settled = useAfterTransition(MOTION.screenMs);
 
   return (
     <>
@@ -141,6 +150,11 @@ const TodayContent = memo(function TodayContent({
       <Reveal order={1}>
         <StatusCard tone={tone} title={status.title} body={status.body} />
       </Reveal>
+      {settled ? (
+        <Reveal order={2}>
+          <UpcomingBills today={data.today} snapshot={snapshot} />
+        </Reveal>
+      ) : null}
       {demoMode ? <SampleDataBanner /> : null}
       {importing ? (
         <Card accessibilityLabel="Reading your bank SMS. This takes a few seconds.">
@@ -151,15 +165,16 @@ const TodayContent = memo(function TodayContent({
           </AppText>
         </Card>
       ) : null}
-      <Reveal order={2}>
-        <AffordLauncherCard daysLeft={snapshot.daysLeft} />
-      </Reveal>
-      <Reveal order={3}>
-        <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
-      </Reveal>
-      <Reveal order={4}>
-        <MonthGlance snapshot={snapshot} />
-      </Reveal>
+      {settled ? (
+        <>
+          <Reveal order={3}>
+            <TodaySpending transactions={transactions} spentPaise={snapshot.spentTodayPaise} />
+          </Reveal>
+          <Reveal order={4}>
+            <MonthGlance snapshot={snapshot} />
+          </Reveal>
+        </>
+      ) : null}
     </>
   );
 });
@@ -172,132 +187,182 @@ const HeroCard = memo(function HeroCard({
   tone: RingTone;
 }) {
   const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
-  const income = useProfile().data?.monthlySalaryPaise ?? null;
+  const { width } = useWindowDimensions();
   const remaining = snapshot.remainingTodayPaise;
   const over = remaining < 0;
   const fraction =
     snapshot.todayBudgetPaise > 0 ? Math.max(0, remaining) / snapshot.todayBudgetPaise : 0;
+  const left = cycleLeft(snapshot);
 
-  // Side by side on most phones; stacked on narrow screens or with large system text.
   const inner = width - TAB_GUTTER * 2 - CARD_PAD * 2;
-  const stacked = inner < 290 || fontScale > 1.3;
-  const ringSize = stacked
-    ? Math.min(220, inner)
-    : Math.round(Math.min(184, Math.max(140, inner * 0.52)));
+  const ringSize = Math.round(Math.min(236, Math.max(180, inner * 0.68)));
 
   return (
     <View
-      style={[
-        styles.heroCard,
-        stacked && styles.heroCardStacked,
-        { backgroundColor: colors.atmosphere.card, borderColor: colors.atmosphere.cardBorder },
-      ]}
+      style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
-      <BudgetRing
-        remainingFraction={fraction}
-        tone={tone}
-        size={ringSize}
-        strokeWidth={Math.round(ringSize * 0.075)}
-        accessibilityLabel={
-          over
-            ? `Over today's budget by ${formatINRWhole(-remaining)}. Budget ${formatINRWhole(snapshot.todayBudgetPaise)}.`
-            : `${formatINRWhole(remaining)} safe to spend today, of ${formatINRWhole(snapshot.todayBudgetPaise)}.`
-        }
-      >
-        {/* Near the top of the circle the space between the ring's sides is narrower. */}
-        <AppText
-          variant="caption"
-          color={over ? 'coralText' : 'muted'}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
-          style={{ maxWidth: ringSize * 0.56 }}
+      {/* A 270° gauge is open at the bottom: pull the stats up into that empty space. */}
+      <View style={{ marginBottom: -Math.round(ringSize * 0.16) }}>
+        <BudgetRing
+          remainingFraction={fraction}
+          tone={tone}
+          size={ringSize}
+          sweep={270}
+          strokeWidth={Math.round(ringSize * 0.06)}
+          accessibilityLabel={
+            over
+              ? `Over today's budget by ${formatINRWhole(-remaining)}. Budget ${formatINRWhole(snapshot.todayBudgetPaise)}.`
+              : `${formatINRWhole(remaining)} safe to spend today, of ${formatINRWhole(snapshot.todayBudgetPaise)}.`
+          }
         >
-          {over ? 'Over today by' : 'Safe to spend today'}
-        </AppText>
-        <Amount
-          paise={Math.abs(remaining)}
-          variant="hero"
-          color={over ? 'coralText' : tone === 'warn' ? 'amberText' : 'text'}
-          animated
-          fit
-          style={colors.atmosphere.heroAmount}
-        />
-        <AppText
-          variant="caption"
-          color="muted"
-          tabular
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-          style={{ maxWidth: ringSize * 0.56 }}
-        >
-          of {formatINRWhole(snapshot.todayBudgetPaise)}
-        </AppText>
-      </BudgetRing>
+          <AppText variant="caption" color={over ? 'coralText' : 'muted'} numberOfLines={1}>
+            {over ? 'Over today by' : 'Safe to spend today'}
+          </AppText>
+          <Amount
+            paise={Math.abs(remaining)}
+            variant="hero"
+            color={over ? 'coralText' : tone === 'warn' ? 'amberText' : 'text'}
+            animated
+            fit
+            style={colors.atmosphere.heroAmount}
+          />
+          <AppText variant="caption" color="muted" tabular numberOfLines={1}>
+            of {formatINRWhole(snapshot.todayBudgetPaise)} today
+          </AppText>
+        </BudgetRing>
+      </View>
+      {/* Outside the ring's accessibility group, so it stays a separate, tappable control. */}
+      <View style={styles.ringInfo}>
+        <InfoButton topic="safeToSpend" />
+      </View>
 
-      {stacked ? null : <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />}
-
-      <View style={[styles.heroStats, stacked && styles.heroStatsStacked]}>
+      <View style={[styles.heroStats, { borderTopColor: colors.border }]}>
+        <HeroStat label="Spent today" paise={snapshot.spentTodayPaise} />
+        <View style={[styles.heroStatDivider, { backgroundColor: colors.border }]} />
         <HeroStat
-          icon="calendar-outline"
-          value={`${snapshot.daysLeft} ${snapshot.daysLeft === 1 ? 'day' : 'days'}`}
-          label="until next payday"
+          label={left.overPaise > 0 ? 'Over this month' : 'Left this month'}
+          paise={left.overPaise > 0 ? left.overPaise : left.leftPaise}
+          tone={left.overPaise > 0 ? 'coralText' : 'accentText'}
+          info="leftThisMonth"
         />
-        {income !== null ? (
-          <HeroStat icon="wallet-outline" value={formatINRWhole(income)} label="monthly income" />
-        ) : null}
-        <HeroStat icon="time-outline" paise={snapshot.spentTodayPaise} label="spent today" />
+        <View style={[styles.heroStatDivider, { backgroundColor: colors.border }]} />
+        <HeroStat
+          label="To payday"
+          value={`${snapshot.daysLeft} ${snapshot.daysLeft === 1 ? 'day' : 'days'}`}
+        />
       </View>
     </View>
   );
 });
 
 function HeroStat({
-  icon,
   label,
   value,
   paise,
+  tone = 'text',
+  info,
 }: {
-  icon: IconName;
   label: string;
   value?: string;
   paise?: number;
+  tone?: 'text' | 'accentText' | 'coralText';
+  info?: InfoTopic;
 }) {
   return (
-    <View
-      style={styles.heroStat}
-      accessible
-      accessibilityLabel={`${value ?? formatINRWhole(paise ?? 0)} ${label}`}
-    >
-      <Icon name={icon} size={ICON.lg} color="accentText" />
-      <View style={styles.flex}>
+    <View style={styles.heroStat}>
+      <View style={styles.statLabelRow}>
+        <AppText variant="caption" color="muted" numberOfLines={1}>
+          {label}
+        </AppText>
+        {info ? <InfoButton topic={info} size={14} /> : null}
+      </View>
+      <View accessible accessibilityLabel={`${label}: ${value ?? formatINRWhole(paise ?? 0)}`}>
         {paise !== undefined ? (
-          <Amount paise={paise} variant="bodyStrong" animated fit />
+          <Amount paise={paise} variant="heading" color={tone} animated fit />
         ) : (
-          <AppText
-            variant="bodyStrong"
-            tabular
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}
-          >
+          <AppText variant="heading" tabular numberOfLines={1}>
             {value}
           </AppText>
         )}
-        <AppText
-          variant="caption"
-          color="muted"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.8}
-        >
-          {label}
-        </AppText>
       </View>
     </View>
   );
+}
+
+/** Rent, EMIs and bills still due before payday (already set aside from the daily amount). */
+const UpcomingBills = memo(function UpcomingBills({
+  today,
+  snapshot,
+}: {
+  today: DateKey;
+  snapshot: BudgetSnapshot;
+}) {
+  const { colors } = useTheme();
+  const profile = useProfile().data;
+  const bills = useMemo(
+    () => (profile ? getUpcomingBills(today, snapshot.cycle, profile.fixedExpenses) : null),
+    [profile, today, snapshot.cycle],
+  );
+  if (!bills || bills.upcomingExpenses.length === 0) return null;
+  const sorted = [...bills.upcomingExpenses].sort(
+    (a, b) => dueOrder(a.dueDay, today) - dueOrder(b.dueDay, today),
+  );
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <AppText variant="heading" accessibilityRole="header">
+          Upcoming bills
+        </AppText>
+        <AppText variant="label" color="amberText" tabular>
+          {formatINRWhole(bills.upcomingPaise)}
+        </AppText>
+      </View>
+      <View style={[styles.bills, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {sorted.slice(0, 4).map((f, i) => (
+          <View
+            key={f.id}
+            style={[
+              styles.billRow,
+              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+            ]}
+            accessible
+            accessibilityLabel={`${f.name}, ${formatINRWhole(f.amountPaise)}, due on the ${ordinal(f.dueDay)}`}
+          >
+            <View style={[styles.billIcon, { backgroundColor: withAlpha(colors.amber, 0.12) }]}>
+              <Icon name="calendar-clear-outline" size={ICON.md} color="amberText" />
+            </View>
+            <View style={styles.flex}>
+              <AppText variant="bodyStrong" numberOfLines={1}>
+                {f.name}
+              </AppText>
+              <AppText variant="caption" color="muted">
+                Due on the {ordinal(f.dueDay)} · set aside
+              </AppText>
+            </View>
+            <AppText variant="bodyStrong" tabular>
+              {formatINRWhole(f.amountPaise)}
+            </AppText>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+});
+
+/** Days from today until a monthly due day (for ordering bills soonest first). */
+function dueOrder(dueDay: number, today: DateKey): number {
+  const day = Number(today.slice(8, 10));
+  return dueDay >= day ? dueDay - day : dueDay + 31 - day;
+}
+
+/** "Thu, 20 Nov" for a date key. */
+function weekdayDate(key: DateKey): string {
+  const [y, m, d] = key.split('-').map(Number) as [number, number, number];
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
+    new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  ];
+  return `${weekday}, ${formatShortDate(key)}`;
 }
 
 const StatusCard = memo(function StatusCard({
@@ -312,58 +377,27 @@ const StatusCard = memo(function StatusCard({
   const { colors } = useTheme();
   const hue = tone === 'over' ? colors.coral : tone === 'warn' ? colors.amber : colors.accent;
   const icon: IconName =
-    tone === 'over' ? 'sunny-outline' : tone === 'warn' ? 'time-outline' : 'leaf-outline';
+    tone === 'over' ? 'alert-circle-outline' : tone === 'warn' ? 'time-outline' : 'checkmark';
   return (
     <PressableScale
       onPress={() => router.push('/insights')}
       accessibilityRole="button"
       accessibilityLabel={`${title}. ${body}`}
       accessibilityHint="Opens your money story"
-      style={[
-        styles.status,
-        {
-          backgroundColor: withAlpha(hue, colors.softTint),
-          borderColor: withAlpha(hue, colors.softTint * 2.5),
-        },
-      ]}
+      style={[styles.status, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
-      <View style={[styles.statusIcon, { backgroundColor: withAlpha(hue, colors.softTint * 2) }]}>
+      <View
+        style={[styles.statusIcon, { borderColor: hue, backgroundColor: withAlpha(hue, 0.12) }]}
+      >
         <Icon name={icon} size={ICON.md} tint={hue} />
       </View>
       <View style={styles.flex} accessibilityLiveRegion="polite">
-        <AppText variant="bodyStrong">{title}</AppText>
+        <View style={styles.titleWithInfo}>
+          <AppText variant="bodyStrong">{title}</AppText>
+          {tone === 'ok' ? <InfoButton topic="onTrack" /> : null}
+        </View>
         <AppText variant="caption" color="muted">
           {body}
-        </AppText>
-      </View>
-      <Icon name="chevron-forward" size={ICON.md} color="muted" />
-    </PressableScale>
-  );
-});
-
-const AffordLauncherCard = memo(function AffordLauncherCard({ daysLeft }: { daysLeft: number }) {
-  const { colors } = useTheme();
-  return (
-    <PressableScale
-      onPress={() => router.push('/afford' as Href)}
-      accessibilityRole="button"
-      accessibilityLabel={`Can I afford this? Simulate a planned purchase. ${daysLeft} days until payday.`}
-      accessibilityHint="Opens the purchase affordability simulator"
-      style={[
-        styles.affordLauncher,
-        {
-          backgroundColor: colors.atmosphere.card,
-          borderColor: colors.atmosphere.cardBorder,
-        },
-      ]}
-    >
-      <View style={[styles.affordIconWrap, { backgroundColor: `${colors.accent}18` }]}>
-        <Icon name="calculator-outline" size={ICON.md} color="accent" />
-      </View>
-      <View style={styles.affordTextCol}>
-        <AppText variant="bodyStrong">Can I afford this?</AppText>
-        <AppText variant="caption" color="muted">
-          Simulate a purchase before spending · {daysLeft} days left
         </AppText>
       </View>
       <Icon name="chevron-forward" size={ICON.md} color="muted" />
@@ -574,18 +608,40 @@ const styles = StyleSheet.create({
   shrink: { flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
   heroCard: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: CARD_PAD,
-    gap: SPACE.lg,
+    paddingHorizontal: CARD_PAD,
+    paddingTop: SPACE.xl,
+    paddingBottom: SPACE.lg,
+    gap: SPACE.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
   },
-  heroCardStacked: { flexDirection: 'column' },
-  heroDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
-  heroStats: { flex: 1, gap: SPACE.lg },
-  heroStatsStacked: { alignSelf: 'stretch', flex: 0 },
-  heroStat: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
+  ringLabel: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  ringInfo: { position: 'absolute', top: SPACE.lg, right: SPACE.lg },
+  heroStats: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: SPACE.lg,
+    marginTop: SPACE.xs,
+  },
+  heroStat: { flex: 1, alignItems: 'center', gap: SPACE.xs, paddingHorizontal: SPACE.xs },
+  statLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroStatDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  bills: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: SPACE.lg,
+  },
+  billRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingVertical: SPACE.md },
+  billIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleWithInfo: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
 
   status: {
     flexDirection: 'row',
@@ -598,6 +654,7 @@ const styles = StyleSheet.create({
   statusIcon: {
     width: 40,
     height: 40,
+    borderWidth: 1.5,
     borderRadius: RADIUS.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -636,29 +693,10 @@ const styles = StyleSheet.create({
   glanceDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
   footerRow: {
     flexDirection: 'row',
-    gap: SPACE.sm,
+    gap: SPACE.md,
     width: '100%',
   },
   footerCol: {
     flex: 1,
-  },
-  affordLauncher: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.md,
-    padding: SPACE.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-  },
-  affordIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  affordTextCol: {
-    flex: 1,
-    gap: 2,
   },
 });

@@ -14,6 +14,8 @@ interface BudgetRingProps {
   tone: RingTone;
   size?: number;
   strokeWidth?: number;
+  /** Degrees of the circle drawn: 360 = full ring, 270 = a gauge open at the bottom. */
+  sweep?: number;
   children?: ReactNode;
   accessibilityLabel: string;
 }
@@ -27,6 +29,7 @@ export const BudgetRing = memo(function BudgetRing({
   tone,
   size = 260,
   strokeWidth = 18,
+  sweep = 360,
   children,
   accessibilityLabel,
 }: BudgetRingProps) {
@@ -42,11 +45,18 @@ export const BudgetRing = memo(function BudgetRing({
 
   const path = useMemo(() => {
     const inset = strokeWidth / 2 + 1;
-    // Start at 12 o'clock and sweep clockwise.
+    // A full ring starts at 12 o'clock; a gauge starts bottom-left and leaves its gap at the
+    // bottom. Both sweep clockwise.
+    const full = sweep >= 360;
+    const start = full ? -90 : 90 + (360 - sweep) / 2;
     return Skia.PathBuilder.Make()
-      .addArc({ x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 }, -90, 359.9)
+      .addArc(
+        { x: inset, y: inset, width: size - inset * 2, height: size - inset * 2 },
+        start,
+        full ? 359.9 : sweep,
+      )
       .detach();
-  }, [size, strokeWidth]);
+  }, [size, strokeWidth, sweep]);
 
   const color = tone === 'over' ? colors.coral : tone === 'warn' ? colors.amber : colors.accent;
 

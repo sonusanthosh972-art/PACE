@@ -272,3 +272,49 @@ decision:
    stores no chat text and logs no message content.
 8. **No looping animation (D20):** the "thinking" state is a static indicator; the streamed text is
    the progress.
+
+## D35. Forest-and-gold redesign (presentation only)
+
+```yaml
+decision:
+  action: apps/mobile theme tokens, shared UI components, the six main screens' layout
+  reason: match the supplied six-screen reference (forest green, gold actions, ivory text, more space)
+  evidence: reference image; current tokens.ts palette (graphite + mint) and serif titles
+  risk: medium (wide visual change); no logic, query, API or schema changes
+  allowed_by_contract: true
+```
+
+- Palette: bg #081F17, secondary #0D2A20, cards #12382B, elevated #154734, text #F5F3E8,
+  muted #A9B2AC, gold #D4AF37 (primary actions, selected tab), green #72C99B (positive),
+  red #E58C82 (negative), dividers #294438. Titles use Inter instead of the serif.
+- The time-of-day city image is no longer drawn behind the tab headers (flat background).
+- A reusable InfoButton opens a bottom sheet explaining a figure in plain words; it is used only
+  beside figures people may not understand (safe to spend, total spent, left this month, daily
+  allowance, on track).
+- Screens keep every existing feature; sections the reference does not show stay further down.
+
+## D36. PACE brand rebrand: obsidian, white and mint teal (replaces D35's palette)
+
+```yaml
+decision:
+  action: theme tokens, splash, brand assets, shared components, dashboard layout
+  reason: adopt the supplied PACE logo and its animation as the brand identity
+  evidence: assets/logo/Futuristic PACE Progress Logo.png (1254×1254, dark rounded tile on black),
+            assets/logo/PACE Logo Animation Grid.gif (414×414, 9 frames × 180 ms = 1.62 s, loops,
+            background #030914)
+  risk: medium (visual only; new dependency expo-image for GIF playback)
+  allowed_by_contract: true
+```
+
+- Palette: bg #0B0F19, surface #111827, elevated #151E2D, secondary #1C2738, border #273449,
+  text #F8FAFC, secondary text #94A3B8, primary/teal #2DD4BF, success #34D399, warning #FBBF24,
+  error #F87171. The `gold` token is renamed `primary`; no gold or forest green remains.
+- Both supplied assets are used as files, unchanged, under their own names. The GIF sits on
+  #030914 (measured), so the splash uses that colour so the animation has no visible box; the
+  app itself uses #0B0F19 as specified. Two frames of the GIF are saved as stills (first frame
+  for the system splash, last frame to hold the finished logo, since the GIF loops forever):
+  pixels copied from the GIF, nothing redrawn.
+- expo-image (Expo's own module) plays the GIF; React Native's Image needs extra native setup
+  for animated GIFs on Android.
+- The splash plays the animation once (1.62 s), holds the finished logo briefly, then fades into
+  the app as soon as the app is ready: about 2.3 s instead of the old 4 s.

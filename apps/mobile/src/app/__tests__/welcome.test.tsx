@@ -5,14 +5,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Welcome from '../onboarding/index';
 import { useAuthStore } from '@/state/authStore';
 
-// Skia's Jest mock has no font support; the logo is native graphics, so stand it in.
-jest.mock('@/components/brand/PaceLogo', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    PaceLogo: () => <View accessible accessibilityRole="image" accessibilityLabel="PACE" />,
-  };
-});
-
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   router: { push: (...a: unknown[]) => mockPush(...a), replace: jest.fn() },

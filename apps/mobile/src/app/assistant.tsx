@@ -7,6 +7,7 @@ import {
   Alert,
   FlatList,
   Keyboard,
+  ScrollView,
   Platform,
   StyleSheet,
   TextInput,
@@ -58,6 +59,9 @@ export const QUICK_PROMPTS: { icon: IconName; label: string; question: string }[
   { icon: 'leaf-outline', label: 'Help me save money', question: 'Help me create a savings plan.' },
   { icon: 'pulse-outline', label: 'How am I doing?', question: 'How am I doing this month?' },
 ];
+
+/** Short follow-ups offered above the composer once a conversation has started. */
+const FOLLOW_UPS = ['How can I save more?', 'Analyse my spending', 'How am I doing this month?'];
 
 export const SUGGESTED_QUESTIONS = [
   'How much should I spend today?',
@@ -319,6 +323,7 @@ export default function AssistantScreen() {
         role={m.role}
         content={m.content}
         status={m.status}
+        time={m.createdAt}
         onCopy={m.role === 'assistant' && m.status === 'done' ? () => copy(m.content) : undefined}
         onRetry={
           m.status === 'error' && m.id === lastMessage?.id && !busy ? () => retry(m) : undefined
@@ -341,24 +346,27 @@ export default function AssistantScreen() {
       <View style={styles.header}>
         <PressableScale
           onPress={() => router.back()}
-          style={[styles.iconButton, { borderColor: colors.border }]}
+          style={styles.iconButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Icon name="chevron-back" size={ICON.md} color="text" />
+          <Icon name="arrow-back" size={ICON.lg} color="text" />
         </PressableScale>
         <View style={styles.headerText}>
-          <AppText variant="heading" accessibilityRole="header">
-            Money Assistant
-          </AppText>
+          <View style={styles.titleRow}>
+            <AppText variant="heading" accessibilityRole="header" style={styles.title}>
+              Money Assistant
+            </AppText>
+            <Icon name="sparkles" size={ICON.md} tint={colors.primary} />
+          </View>
           <AppText variant="caption" color="muted">
-            Answers from your own numbers · read-only
+            Your personal finance companion
           </AppText>
         </View>
         {messages.length > 0 ? (
           <PressableScale
             onPress={clear}
-            style={[styles.iconButton, { borderColor: colors.border }]}
+            style={styles.iconButton}
             accessibilityRole="button"
             accessibilityLabel="Clear conversation"
           >
@@ -397,61 +405,81 @@ export default function AssistantScreen() {
             <Notice text="You've used today's questions. The assistant is back tomorrow." />
           ) : null}
 
-          <View
-            style={[
-              styles.composer,
-              { borderTopColor: colors.border, paddingBottom: SPACE.sm + keyboardInset },
-            ]}
-          >
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Ask about your money…"
-              placeholderTextColor={colors.muted}
-              multiline
-              maxLength={MAX_QUESTION_CHARS}
-              editable={!disabled}
-              accessibilityLabel="Your question"
+          {messages.length > 0 && !busy && !disabled ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.followUps}
+              style={styles.followUpsScroll}
+            >
+              {FOLLOW_UPS.map((q) => (
+                <PressableScale
+                  key={q}
+                  onPress={() => send(q)}
+                  accessibilityRole="button"
+                  accessibilityLabel={q}
+                  style={[
+                    styles.followUp,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
+                  <AppText variant="caption">{q}</AppText>
+                </PressableScale>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          <View style={[styles.composer, { paddingBottom: SPACE.md + keyboardInset }]}>
+            <View
               style={[
-                styles.input,
-                { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
+                styles.inputWrap,
+                { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
-            />
-            {busy ? (
-              <PressableScale
-                onPress={() => abortRef.current?.abort()}
-                style={[
-                  styles.send,
-                  { backgroundColor: colors.elevated, borderColor: colors.border },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Stop the answer"
-              >
-                <Icon name="stop" size={ICON.sm} color="text" />
-              </PressableScale>
-            ) : (
-              <PressableScale
-                onPress={() => send(draft)}
-                disabled={!draft.trim() || disabled}
-                style={[
-                  styles.send,
-                  {
-                    backgroundColor:
-                      draft.trim() && !disabled ? colors.accentFill : colors.elevated,
-                    borderColor: draft.trim() && !disabled ? colors.accentFill : colors.border,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Send"
-                accessibilityState={{ disabled: !draft.trim() || disabled }}
-              >
-                <Icon
-                  name="arrow-up"
-                  size={ICON.md}
-                  color={draft.trim() && !disabled ? 'onAccent' : 'muted'}
-                />
-              </PressableScale>
-            )}
+            >
+              <Icon name="sparkles-outline" size={ICON.md} tint={colors.primary} />
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Ask a question…"
+                placeholderTextColor={colors.muted}
+                multiline
+                maxLength={MAX_QUESTION_CHARS}
+                editable={!disabled}
+                accessibilityLabel="Your question"
+                style={[styles.input, { color: colors.text }]}
+              />
+              {busy ? (
+                <PressableScale
+                  onPress={() => abortRef.current?.abort()}
+                  style={[styles.send, { backgroundColor: colors.elevated }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop the answer"
+                >
+                  <Icon name="stop" size={ICON.sm} color="text" />
+                </PressableScale>
+              ) : (
+                <PressableScale
+                  onPress={() => send(draft)}
+                  disabled={!draft.trim() || disabled}
+                  style={[
+                    styles.send,
+                    {
+                      backgroundColor: draft.trim() && !disabled ? colors.primary : colors.elevated,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send"
+                  accessibilityState={{ disabled: !draft.trim() || disabled }}
+                >
+                  <Icon
+                    name="chevron-forward"
+                    size={ICON.md}
+                    tint={draft.trim() && !disabled ? colors.onAccent : colors.muted}
+                  />
+                </PressableScale>
+              )}
+            </View>
           </View>
         </>
       )}
@@ -576,20 +604,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.md,
-    paddingHorizontal: SPACE.lg,
+    paddingHorizontal: SPACE.md,
     paddingVertical: SPACE.md,
   },
-  headerText: { flex: 1 },
+  headerText: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  title: { fontSize: 22, lineHeight: 30 },
   iconButton: {
     width: MIN_TOUCH - 4,
     height: MIN_TOUCH - 4,
-    borderRadius: RADIUS.pill,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  list: {
+  followUpsScroll: { flexGrow: 0 },
+  followUps: { gap: SPACE.sm, paddingHorizontal: SPACE.gutter, paddingBottom: SPACE.sm },
+  followUp: {
+    minHeight: 40,
     paddingHorizontal: SPACE.lg,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+  },
+  list: {
+    paddingHorizontal: SPACE.gutter,
     paddingTop: SPACE.sm,
     paddingBottom: SPACE.lg,
     gap: SPACE.lg,
@@ -643,32 +680,31 @@ const styles = StyleSheet.create({
     padding: SPACE.md,
     borderRadius: RADIUS.md,
   },
-  composer: {
+  composer: { paddingHorizontal: SPACE.gutter, paddingTop: SPACE.xs },
+  inputWrap: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: SPACE.sm,
-    paddingHorizontal: SPACE.lg,
-    paddingTop: SPACE.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 56,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingLeft: SPACE.lg,
+    paddingRight: SPACE.xs + 2,
+    paddingVertical: SPACE.xs + 2,
   },
   input: {
     flex: 1,
-    minHeight: MIN_TOUCH,
+    minHeight: 44,
     maxHeight: 140,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: SPACE.lg,
-    paddingTop: SPACE.md,
-    paddingBottom: SPACE.md,
+    paddingVertical: SPACE.md - 2,
     fontFamily: FONT.regular,
     fontSize: 16,
     lineHeight: 22,
   },
   send: {
-    width: MIN_TOUCH,
-    height: MIN_TOUCH,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.pill,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

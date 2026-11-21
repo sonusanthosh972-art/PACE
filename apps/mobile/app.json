@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#16171A",
+    "backgroundColor": "#0B0F19",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.paisapulse.app"
@@ -19,7 +19,7 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#16171A",
+        "backgroundColor": "#F5F1E8",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -38,9 +38,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#16171A",
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 200,
+          "backgroundColor": "#030914",
+          "image": "./assets/logo/PACE Logo Animation Grid - first frame.png",
+          "imageWidth": 240,
           "resizeMode": "contain"
         }
       ],
@@ -51,7 +51,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.895421538943-a1c75joq5c42v5j3ldubc77fblhuskr9"
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true

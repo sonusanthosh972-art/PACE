@@ -39,8 +39,9 @@ export const TransactionRow = memo(function TransactionRow({
   const { colors } = useTheme();
   const category = CATEGORIES[tx.category];
   const credit = tx.direction === 'credit';
+  // The category shows as the icon; the line underneath is how and when it was paid.
   const meta = [
-    tx.needsReview ? 'Tap to tag' : category.label,
+    tx.needsReview ? 'Tap to tag' : null,
     modeLabel(tx),
     showTime ? formatTime(tx.occurredAt) : null,
   ]
@@ -56,7 +57,7 @@ export const TransactionRow = memo(function TransactionRow({
       accessibilityRole="button"
       accessibilityLabel={describeTransaction(tx)}
       accessibilityHint={onPress ? 'Opens details to change the category' : undefined}
-      style={[styles.row, { backgroundColor: colors.surface }]}
+      style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       <View
         style={[
@@ -102,14 +103,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACE.md,
     minHeight: MIN_TOUCH + 16,
-    paddingVertical: SPACE.md,
+    paddingVertical: SPACE.md + 2,
     paddingHorizontal: SPACE.lg,
     borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   badge: {
-    width: 42,
-    height: 42,
-    borderRadius: RADIUS.sm,
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

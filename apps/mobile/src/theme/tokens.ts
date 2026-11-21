@@ -15,9 +15,13 @@ export interface Palette {
   accentText: string;
   amberText: string;
   coralText: string;
-  /** Primary button fill, and the text/icon colour placed on it (≥ 4.5:1). */
+  /** Primary button fill (teal), and the text/icon colour placed on it (≥ 4.5:1). */
   accentFill: string;
   onAccent: string;
+  /** Mint teal: primary actions, the selected tab, money available to spend. */
+  primary: string;
+  /** Slightly lighter than bg: tab bar, input fields. */
+  secondaryBg: string;
   track: string;
   scrim: string;
   /** Bottom tab bar background. */
@@ -36,6 +40,8 @@ export interface Palette {
     fadeStops: readonly number[];
     onImage: string;
     onImageMuted: string;
+    /** Soft shadow behind text on the image, and under floating buttons. */
+    shadow: string;
     chrome: string;
     card: string;
     cardBorder: string;
@@ -45,58 +51,73 @@ export interface Palette {
   categories: Record<CategoryId, string>;
 }
 
-// The app is dark only. No pure white or pure black anywhere.
+// The app is dark only: PACE obsidian with white text and mint teal (from the brand logo).
+// No pure white or pure black anywhere.
 export const COLORS: Palette = {
-  bg: '#16171A',
-  surface: '#1F2125',
-  elevated: '#282B30',
-  text: '#E9E7E2',
-  muted: '#9C9A94',
-  border: '#33363C',
-  accent: '#7BC6A4',
-  amber: '#E3B169',
-  coral: '#E08A7A',
-  accentText: '#7BC6A4',
-  amberText: '#E3B169',
-  coralText: '#E08A7A',
-  accentFill: '#7BC6A4',
-  onAccent: '#16171A',
-  track: '#2C2F35',
-  scrim: 'rgba(10, 11, 13, 0.6)',
-  nav: '#1F2125',
-  softTint: 0.08,
+  bg: '#0B0F19',
+  surface: '#111827',
+  elevated: '#151E2D',
+  text: '#F8FAFC',
+  muted: '#94A3B8',
+  border: '#273449',
+  accent: '#2DD4BF',
+  amber: '#FBBF24',
+  coral: '#F87171',
+  accentText: '#2DD4BF',
+  amberText: '#FBBF24',
+  coralText: '#F87171',
+  accentFill: '#2DD4BF',
+  onAccent: '#0B0F19',
+  primary: '#2DD4BF',
+  secondaryBg: '#1C2738',
+  track: '#1C2738',
+  scrim: 'rgba(5, 8, 15, 0.72)',
+  nav: '#111827',
+  softTint: 0.1,
   atmosphere: {
-    tint: 'rgba(10, 11, 13, 0.08)',
-    topShade: 'rgba(8, 10, 14, 0.35)',
-    fade: ['rgba(22, 23, 26, 0)', 'rgba(22, 23, 26, 0.35)', '#16171A'],
+    // Obsidian tint over the city image, a shade behind the header text, and a fade into bg.
+    tint: 'rgba(11, 15, 25, 0.22)',
+    topShade: 'rgba(5, 8, 15, 0.5)',
+    fade: ['rgba(11, 15, 25, 0)', 'rgba(11, 15, 25, 0.5)', '#0B0F19'],
     fadeStops: [0, 0.6, 1],
-    onImage: '#F4F2EC',
-    onImageMuted: 'rgba(244, 242, 236, 0.82)',
-    chrome: 'rgba(14, 18, 22, 0.45)',
-    card: 'rgba(17, 33, 29, 0.86)',
-    cardBorder: 'rgba(123, 198, 164, 0.24)',
-    heroAmount: { fontFamily: 'Inter_600SemiBold', letterSpacing: 0 },
+    onImage: '#F8FAFC',
+    onImageMuted: '#CBD5E1',
+    shadow: 'rgba(5, 8, 15, 0.55)',
+    chrome: '#151E2D',
+    card: '#111827',
+    cardBorder: '#273449',
+    heroAmount: { fontFamily: 'Inter_600SemiBold', letterSpacing: -0.5 },
   },
   categories: {
-    food: '#E08A7A',
-    coffee: '#C9A27E',
-    groceries: '#7BC6A4',
-    transport: '#7FA8D1',
-    shopping: '#C79BD1',
-    bills: '#E3B169',
-    subscriptions: '#9AA7E0',
-    entertainment: '#D99BB6',
-    health: '#8ACBC7',
-    rent_emi: '#A3A19A',
-    transfers: '#B8B4A8',
-    cash: '#B5C98A',
-    other: '#8F8D88',
-    uncategorised: '#6F6D69',
+    food: '#FB923C',
+    coffee: '#D6A274',
+    groceries: '#34D399',
+    transport: '#60A5FA',
+    shopping: '#A78BFA',
+    bills: '#FBBF24',
+    subscriptions: '#818CF8',
+    entertainment: '#F472B6',
+    health: '#22D3EE',
+    rent_emi: '#94A3B8',
+    transfers: '#CBD5E1',
+    cash: '#A3E635',
+    other: '#64748B',
+    uncategorised: '#475569',
   },
 };
 
-export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
-export const RADIUS = { sm: 10, md: 16, lg: 22, pill: 999 } as const;
+/** 4/8-point grid. Screens use 20 (gutter) at the sides and 24 between sections. */
+export const SPACE = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  gutter: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 48,
+} as const;
+export const RADIUS = { sm: 10, md: 14, lg: 20, pill: 999 } as const;
 export const MIN_TOUCH = 48;
 export const ICON = { sm: 16, md: 20, lg: 24 } as const;
 
@@ -118,13 +139,13 @@ export const FONT = {
 
 /** Sizes in points; line height 1.5× for running text. Hero 52pt, tabular numbers. */
 export const TYPE = {
-  hero: { fontSize: 52, lineHeight: 62, fontFamily: FONT.semibold },
-  title: { fontSize: 24, lineHeight: 32, fontFamily: FONT.semibold },
-  heading: { fontSize: 19, lineHeight: 28, fontFamily: FONT.semibold },
+  hero: { fontSize: 38, lineHeight: 46, fontFamily: FONT.semibold },
+  title: { fontSize: 32, lineHeight: 40, fontFamily: FONT.semibold },
+  heading: { fontSize: 18, lineHeight: 26, fontFamily: FONT.semibold },
   body: { fontSize: 16, lineHeight: 24, fontFamily: FONT.regular },
   bodyStrong: { fontSize: 16, lineHeight: 24, fontFamily: FONT.medium },
   label: { fontSize: 15, lineHeight: 22, fontFamily: FONT.medium },
-  caption: { fontSize: 14, lineHeight: 21, fontFamily: FONT.regular },
+  caption: { fontSize: 13, lineHeight: 19, fontFamily: FONT.regular },
   /** Small uppercase section label. */
   overline: {
     fontSize: 12,
@@ -133,21 +154,21 @@ export const TYPE = {
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  /** Elegant serif heading variant - large display style. */
-  serifHero: { fontSize: 52, lineHeight: 62, fontFamily: FONT.serifBold },
-  /** Elegant serif heading variant - page title style. */
+  /** Display amount (kept name: used to be a serif). */
+  serifHero: { fontSize: 38, lineHeight: 46, fontFamily: FONT.semibold, letterSpacing: -0.5 },
+  /** Page title: "Insights", "Transactions". */
   serifTitle: {
     fontSize: 28,
     lineHeight: 36,
-    fontFamily: FONT.serifBold,
-    letterSpacing: -0.5,
+    fontFamily: FONT.semibold,
+    letterSpacing: -0.4,
   },
-  /** Elegant serif heading variant - section heading style. */
+  /** Section heading. */
   serifHeading: {
-    fontSize: 22,
-    lineHeight: 30,
-    fontFamily: FONT.serifSemibold,
-    letterSpacing: -0.3,
+    fontSize: 20,
+    lineHeight: 28,
+    fontFamily: FONT.semibold,
+    letterSpacing: -0.2,
   },
 } as const;
 

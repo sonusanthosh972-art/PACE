@@ -15,3 +15,17 @@ export function useAfterTransition(delayMs: number = MOTION.tabMs + 40): boolean
   }, [delayMs]);
   return done;
 }
+
+/**
+ * Counts from 1 up to `total`, one step per frame. A page with several heavy cards can mount them
+ * one per frame instead of all in one long frame that stalls the screen.
+ */
+export function useProgressiveCount(total: number): number {
+  const [count, setCount] = useState(1);
+  useEffect(() => {
+    if (count >= total) return;
+    const frame = requestAnimationFrame(() => setCount((c) => Math.min(total, c + 1)));
+    return () => cancelAnimationFrame(frame);
+  }, [count, total]);
+  return Math.min(count, total);
+}

@@ -141,7 +141,7 @@ export function DayCardModal({
             {card.mood === 'celebrate' ? (
               <>
                 <View style={[styles.spark, styles.sparkA]}>
-                  <Icon name="sparkles" size={18} tint={colors.amber} />
+                  <Icon name="sparkles" size={18} tint={colors.accent} />
                 </View>
                 <View style={[styles.spark, styles.sparkB]}>
                   <Icon name="sparkles" size={14} tint={colors.accent} />

@@ -11,9 +11,10 @@ describe('TimeBackground', () => {
     const { getByTestId, queryByTestId, toJSON } = await render(
       <TimeBackground timeOfDay="night" />,
     );
-    expect(getByTestId('time-bg-current', HIDDEN).props.source).toBe(
+    // expo-image keeps its source as a list.
+    expect(getByTestId('time-bg-current', HIDDEN).props.source).toEqual([
       getTimeBackgroundAsset('night'),
-    );
+    ]);
     expect(queryByTestId('time-bg-previous', HIDDEN)).toBeNull();
     expect(JSON.stringify(toJSON())).toContain('"importantForAccessibility":"no-hide-descendants"');
   });
@@ -23,11 +24,12 @@ describe('TimeBackground', () => {
       <TimeBackground timeOfDay="evening" />,
     );
     await rerender(<TimeBackground timeOfDay="night" />);
-    expect(getByTestId('time-bg-current', HIDDEN).props.source).toBe(
+    // expo-image keeps its source as a list.
+    expect(getByTestId('time-bg-current', HIDDEN).props.source).toEqual([
       getTimeBackgroundAsset('night'),
-    );
+    ]);
     // The old image is either still fading out underneath or already gone, never on top.
     const previous = queryByTestId('time-bg-previous', HIDDEN);
-    if (previous) expect(previous.props.source).toBe(getTimeBackgroundAsset('evening'));
+    if (previous) expect(previous.props.source).toEqual([getTimeBackgroundAsset('evening')]);
   });
 });

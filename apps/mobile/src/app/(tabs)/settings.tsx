@@ -5,8 +5,10 @@ import { Alert, AppState, Platform, StyleSheet, View } from 'react-native';
 import * as SmsReader from '../../../modules/sms-reader';
 
 import { AppHeader, HeaderBackground, TAB_GUTTER } from '@/components/AppHeader';
-import { AppLogo } from '@/components/AppLogo';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AppText } from '@/components/AppText';
+import { Icon } from '@/components/Icon';
+import { PressableScale } from '@/components/PressableScale';
 import { ListRow, RowGroup, SectionTitle } from '@/components/Controls';
 import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -22,7 +24,8 @@ import {
 } from '@/services/biometrics';
 import { useAuthStore, type SyncState } from '@/state/authStore';
 import { useProfile, useSettings } from '@/state/queries';
-import { SPACE } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { ICON, RADIUS, SPACE } from '@/theme/tokens';
 
 function formatBackupStatus(
   status: SyncState,
@@ -101,11 +104,7 @@ export default function SettingsScreen() {
   }, []);
 
   const header = (
-    <AppHeader
-      page="settings"
-      title="Your setup"
-      hint="Change your budget, alerts, data and app lock."
-    />
+    <AppHeader page="settings" title="Settings" hint="Manage your account and preferences." />
   );
   const screenProps = {
     background: <HeaderBackground />,
@@ -151,13 +150,25 @@ export default function SettingsScreen() {
     <Screen {...screenProps}>
       {header}
 
-      <SectionTitle icon="wallet-outline">Budget</SectionTitle>
+      <ProfileCard
+        name={isAuthenticated ? user?.name || 'Your account' : 'Sign in or create account'}
+        detail={
+          isAuthenticated
+            ? (user?.email ?? formatBackupStatus(syncStatus, lastSyncedAt, nextRetrySeconds))
+            : 'Back up and restore on a new phone'
+        }
+        initial={(user?.name || user?.email || '').trim().charAt(0).toUpperCase()}
+      />
+
       <RowGroup>
         <ListRow
-          icon="cash-outline"
-          title="Monthly income"
-          value={p ? formatINRWhole(p.monthlySalaryPaise) : '—'}
-          subtitle={p ? `Payday on the ${ordinal(p.payday)}` : undefined}
+          icon="wallet-outline"
+          title="Budget & plans"
+          subtitle={
+            p
+              ? `${formatINRWhole(p.monthlySalaryPaise)} income · payday on the ${ordinal(p.payday)} · ${formatINRWhole(p.monthlySavingsGoalPaise)} savings`
+              : 'Income, bills and savings'
+          }
           onPress={() => router.push('/settings/budget')}
           flush
         />
@@ -174,38 +185,24 @@ export default function SettingsScreen() {
           flush
         />
         <ListRow
-          icon="trending-up-outline"
-          title="Savings goal"
-          value={p ? formatINRWhole(p.monthlySavingsGoalPaise) : '—'}
-          onPress={() => router.push('/settings/budget')}
-          flush
-        />
-      </RowGroup>
-
-      <SectionTitle icon="notifications-outline">Notifications</SectionTitle>
-      <RowGroup>
-        <ListRow
           icon="notifications-outline"
-          title="Times & alerts"
-          value={
+          title="Notifications"
+          subtitle={
             s.notificationsEnabled
-              ? `${formatTimeOfDay(s.morningTime)} · ${formatTimeOfDay(s.nightTime)}`
-              : 'Off'
+              ? `Reminders at ${formatTimeOfDay(s.morningTime)} and ${formatTimeOfDay(s.nightTime)}`
+              : 'Alerts and reminder time · off'
           }
           onPress={() => router.push('/settings/notifications')}
           flush
         />
-      </RowGroup>
-
-      <SectionTitle icon="chatbox-ellipses-outline">Data sources</SectionTitle>
-      <RowGroup>
         <ListRow
-          icon="chatbox-ellipses-outline"
+          icon="server-outline"
           title="Bank SMS"
-          value={smsAvailable ? (smsState === 'granted' ? 'Connected' : 'Not allowed') : undefined}
           subtitle={
             smsAvailable
-              ? 'Only messages from bank senders are read'
+              ? smsState === 'granted'
+                ? 'Connected · only bank senders are read'
+                : 'Not allowed · tap to allow'
               : 'Available on Android builds'
           }
           onPress={smsAvailable ? () => SmsReader.openAppSettings() : undefined}
@@ -223,9 +220,10 @@ export default function SettingsScreen() {
           onPress={smsAvailable ? () => SmsReader.openNotificationAccessSettings() : undefined}
           flush
         />
+        <ListRow icon="moon-outline" title="Appearance" subtitle="Dark theme" flush />
       </RowGroup>
 
-      <SectionTitle icon="shield-checkmark-outline">Account & security</SectionTitle>
+      <SectionTitle icon="shield-checkmark-outline">Security & backup</SectionTitle>
       <RowGroup>
         <ListRow
           icon={isAuthenticated ? 'cloud-done-outline' : 'person-circle-outline'}
@@ -287,7 +285,7 @@ export default function SettingsScreen() {
       </RowGroup>
 
       <View style={styles.about}>
-        <AppLogo size={32} variant="mark" />
+        <BrandLogo size={56} />
         <AppText variant="bodyStrong">PACE</AppText>
         <AppText variant="caption" color="muted" center style={styles.aboutBody}>
           Raw SMS never leave your phone. If you sign in, amounts and merchants are backed up to
@@ -299,7 +297,58 @@ export default function SettingsScreen() {
   );
 }
 
+function ProfileCard({ name, detail, initial }: { name: string; detail: string; initial: string }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={() => router.push('/settings/auth')}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, ${detail}. Account and backup.`}
+      style={[styles.profile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <View
+        style={[styles.avatar, { backgroundColor: colors.elevated, borderColor: colors.primary }]}
+      >
+        {initial ? (
+          <AppText variant="heading" style={{ color: colors.primary }}>
+            {initial}
+          </AppText>
+        ) : (
+          <Icon name="person-outline" size={ICON.lg} color="text" />
+        )}
+      </View>
+      <View style={styles.flex}>
+        <AppText variant="heading" numberOfLines={1}>
+          {name}
+        </AppText>
+        <AppText variant="caption" color="muted" numberOfLines={1}>
+          {detail}
+        </AppText>
+      </View>
+      <Icon name="chevron-forward" size={ICON.md} color="muted" />
+    </PressableScale>
+  );
+}
+
 const styles = StyleSheet.create({
+  flex: { flex: 1, gap: 2 },
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.lg,
+    padding: SPACE.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: SPACE.xs,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   about: { alignItems: 'center', gap: SPACE.xs, marginTop: SPACE.xxl, marginBottom: SPACE.xl },
   aboutBody: { maxWidth: 320 },
 });

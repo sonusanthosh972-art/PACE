@@ -67,7 +67,7 @@ describe('AuthScreen', () => {
   it('renders sign in mode and validates required fields', async () => {
     const { getByText, getByRole, findByRole } = await renderScreen();
 
-    expect(getByText('Account & Backup')).toBeTruthy();
+    expect(getByText('Welcome back')).toBeTruthy();
     expect(getByRole('button', { name: 'Sign In' })).toBeTruthy();
 
     await fireEvent.press(getByRole('button', { name: 'Sign In' }));

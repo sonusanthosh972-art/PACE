@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import type { AssistantRole, AssistantStatus } from '@/data/assistantRepo';
+import { formatTime } from '@/lib/format';
 import { useTheme } from '@/theme/ThemeProvider';
 import { FONT, ICON, MIN_TOUCH, MOTION, RADIUS, SPACE, withAlpha } from '@/theme/tokens';
 
@@ -97,6 +98,8 @@ export interface MessageBubbleProps {
   status: AssistantStatus;
   /** Still being written by the assistant. */
   streaming?: boolean;
+  /** When it was sent (epoch ms), shown small under the text. */
+  time?: number;
   onCopy?: () => void;
   onRetry?: () => void;
 }
@@ -106,6 +109,7 @@ export const MessageBubble = memo(function MessageBubble({
   content,
   status,
   streaming = false,
+  time,
   onCopy,
   onRetry,
 }: MessageBubbleProps) {
@@ -116,11 +120,18 @@ export const MessageBubble = memo(function MessageBubble({
     return (
       <Animated.View entering={entering} style={styles.userRow}>
         <View
-          style={[styles.bubble, styles.userBubble, { backgroundColor: colors.accentFill }]}
+          style={[styles.bubble, styles.userBubble, { backgroundColor: colors.primary }]}
           accessible
           accessibilityLabel={`You: ${content}`}
         >
-          <AppText color="onAccent">{content}</AppText>
+          <AppText color="onAccent" style={styles.userText}>
+            {content}
+          </AppText>
+          {time ? (
+            <AppText variant="caption" color="onAccent" style={styles.time}>
+              {formatTime(time)}
+            </AppText>
+          ) : null}
         </View>
       </Animated.View>
     );
@@ -134,15 +145,15 @@ export const MessageBubble = memo(function MessageBubble({
             styles.bubble,
             styles.assistantBubble,
             {
-              backgroundColor: withAlpha(colors.amber, 0.08),
-              borderColor: withAlpha(colors.amber, 0.4),
+              backgroundColor: withAlpha(colors.coral, 0.08),
+              borderColor: withAlpha(colors.coral, 0.4),
             },
           ]}
           accessibilityRole="alert"
         >
           <View style={styles.errorHead}>
-            <Icon name="alert-circle-outline" size={ICON.sm} color="amberText" />
-            <AppText variant="label" color="amberText">
+            <Icon name="alert-circle-outline" size={ICON.sm} color="coralText" />
+            <AppText variant="label" color="coralText">
               Couldn&apos;t answer
             </AppText>
           </View>
@@ -159,14 +170,6 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <Animated.View entering={entering} style={styles.assistantRow}>
-      <View style={styles.assistantHead} importantForAccessibility="no-hide-descendants">
-        <View style={[styles.avatar, { backgroundColor: withAlpha(colors.accent, 0.16) }]}>
-          <Icon name="sparkles" size={12} tint={colors.accent} />
-        </View>
-        <AppText variant="caption" color="muted">
-          PACE Assistant
-        </AppText>
-      </View>
       <View
         style={[
           styles.bubble,
@@ -177,7 +180,19 @@ export const MessageBubble = memo(function MessageBubble({
         accessibilityLabel={`Assistant: ${content}`}
         accessibilityLiveRegion={streaming ? 'polite' : 'none'}
       >
-        <RichText text={content} />
+        <View style={styles.assistantInner}>
+          <View style={[styles.avatar, { backgroundColor: withAlpha(colors.primary, 0.16) }]}>
+            <Icon name="sparkles" size={14} tint={colors.primary} />
+          </View>
+          <View style={styles.flex}>
+            <RichText text={content} />
+          </View>
+        </View>
+        {time && !streaming ? (
+          <AppText variant="caption" color="muted" style={styles.time}>
+            {formatTime(time)}
+          </AppText>
+        ) : null}
       </View>
       {!streaming && onCopy ? (
         <View style={styles.actions}>
@@ -225,7 +240,10 @@ const styles = StyleSheet.create({
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start', gap: SPACE.xs },
   bubble: { borderRadius: RADIUS.lg, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md },
-  userBubble: { maxWidth: '85%', borderBottomRightRadius: RADIUS.sm / 2 },
+  userBubble: { maxWidth: '82%', borderBottomRightRadius: RADIUS.sm / 2, gap: SPACE.xs },
+  userText: { fontFamily: FONT.medium },
+  time: { alignSelf: 'flex-end', fontSize: 11, lineHeight: 14, opacity: 0.8 },
+  assistantInner: { flexDirection: 'row', gap: SPACE.md, alignItems: 'flex-start' },
   assistantBubble: {
     maxWidth: '100%',
     borderWidth: StyleSheet.hairlineWidth,
@@ -234,8 +252,8 @@ const styles = StyleSheet.create({
   },
   assistantHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   avatar: {
-    width: 20,
-    height: 20,
+    width: 28,
+    height: 28,
     borderRadius: RADIUS.pill,
     alignItems: 'center',
     justifyContent: 'center',

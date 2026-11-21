@@ -136,7 +136,7 @@ describe('Money Assistant screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'How am I doing?' }));
     await flush();
 
-    expect(screen.getByText('How am I doing this month?')).toBeOnTheScreen();
+    expect(screen.getByLabelText('You: How am I doing this month?')).toBeOnTheScreen();
     expect(
       screen.getByLabelText('Assistant: You have **₹2,000** left this cycle.'),
     ).toBeOnTheScreen();

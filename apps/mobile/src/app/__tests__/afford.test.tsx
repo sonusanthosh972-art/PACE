@@ -88,7 +88,7 @@ describe('AffordScreen UI', () => {
 
   it('renders header, guidance card, and presets initially', async () => {
     await renderScreen();
-    expect(screen.getByText('Can I afford this?')).toBeTruthy();
+    expect(screen.getByText('Can I Afford This?')).toBeTruthy();
     expect(screen.getByText('How simulation protects your money')).toBeTruthy();
     expect(screen.getByText('₹500')).toBeTruthy();
     expect(screen.getByText('₹1,500')).toBeTruthy();
@@ -99,7 +99,7 @@ describe('AffordScreen UI', () => {
     const preset500 = screen.getByRole('button', { name: 'Set amount to ₹500' });
     await fireEvent.press(preset500);
 
-    expect(screen.getByText('● SAFE TO PURCHASE')).toBeTruthy();
+    expect(screen.getByText('Fits your plan')).toBeTruthy();
     expect(screen.getByText('Comfortably Affordable')).toBeTruthy();
     expect(screen.getByText('Bills Protected')).toBeTruthy();
   });
@@ -114,7 +114,7 @@ describe('AffordScreen UI', () => {
 
     const singleTab = screen.getByRole('tab', { name: 'Single purchase simulation' });
     await fireEvent.press(singleTab);
-    expect(screen.getByText('Planned purchase amount')).toBeTruthy();
+    expect(screen.getByText('Purchase amount')).toBeTruthy();
   });
 
   it('confirms a purchase and triggers addManualTransaction with idempotent client ID', async () => {

@@ -10,6 +10,7 @@ import { CategoryGrid } from '@/components/CategoryGrid';
 import { MoneyField, TextField } from '@/components/Fields';
 import { Icon, type IconName } from '@/components/Icon';
 import { PressableScale } from '@/components/PressableScale';
+import { InfoButton } from '@/components/InfoButton';
 import { Screen } from '@/components/Screen';
 import { ErrorState, LoadingState } from '@/components/States';
 import {
@@ -18,12 +19,12 @@ import {
   type AffordabilityTier,
   type ComparisonItem,
 } from '@/domain/afford';
-import type { CategoryId } from '@/domain/categories';
+import { CATEGORIES, type CategoryId } from '@/domain/categories';
 import { formatINRWhole, type Paise } from '@/domain/money';
 import { addManualTransaction } from '@/services/actions';
 import { invalidateAll, useProfile, useToday } from '@/state/queries';
 import { useTheme } from '@/theme/ThemeProvider';
-import { RADIUS, SPACE, type Palette } from '@/theme/tokens';
+import { RADIUS, SPACE, withAlpha, type Palette } from '@/theme/tokens';
 
 type ViewMode = 'single' | 'compare';
 
@@ -46,6 +47,7 @@ export default function AffordScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<CategoryId>('shopping');
   const [isConfirming, setIsConfirming] = useState(false);
+  const [pickingCategory, setPickingCategory] = useState(false);
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
 
   // Multi-option comparison amounts
@@ -167,18 +169,18 @@ export default function AffordScreen() {
       <View style={styles.header}>
         <PressableScale
           onPress={() => router.back()}
-          style={[styles.backButton, { borderColor: colors.border }]}
+          style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Icon name="chevron-back" size={20} color="text" />
+          <Icon name="arrow-back" size={24} color="text" />
         </PressableScale>
         <View style={styles.headerText}>
-          <AppText variant="title" accessibilityRole="header">
-            Can I afford this?
+          <AppText variant="heading" accessibilityRole="header" style={styles.headerTitle}>
+            Can I Afford This?
           </AppText>
           <AppText variant="caption" color="muted">
-            Simulate a purchase to see its immediate and lasting budget impact.
+            See how a purchase affects your plan.
           </AppText>
         </View>
       </View>
@@ -199,7 +201,7 @@ export default function AffordScreen() {
             styles.segmentButton,
             mode === 'single' && [
               styles.segmentActive,
-              { backgroundColor: colors.elevated, borderColor: colors.accent },
+              { backgroundColor: withAlpha(colors.primary, 0.16), borderColor: colors.primary },
             ],
           ]}
           accessibilityRole="tab"
@@ -219,7 +221,7 @@ export default function AffordScreen() {
             styles.segmentButton,
             mode === 'compare' && [
               styles.segmentActive,
-              { backgroundColor: colors.elevated, borderColor: colors.accent },
+              { backgroundColor: withAlpha(colors.primary, 0.16), borderColor: colors.primary },
             ],
           ]}
           accessibilityRole="tab"
@@ -243,7 +245,7 @@ export default function AffordScreen() {
             ]}
           >
             <MoneyField
-              label="Planned purchase amount"
+              label="Purchase amount"
               valuePaise={amountPaise}
               onChangePaise={setAmountPaise}
               large
@@ -294,13 +296,49 @@ export default function AffordScreen() {
               onChangeText={setDescription}
               maxLength={80}
             />
+          </View>
 
-            <View style={styles.categoryWrap}>
-              <AppText variant="caption" color="muted" style={styles.sectionLabel}>
-                CATEGORY
-              </AppText>
-              <CategoryGrid selected={category} onSelect={setCategory} />
-            </View>
+          <View
+            style={[
+              styles.inputCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <PressableScale
+              onPress={() => setPickingCategory((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: pickingCategory }}
+              accessibilityLabel={`Category: ${CATEGORIES[category].label}. Change category.`}
+              style={styles.categoryRow}
+            >
+              <View style={styles.flex}>
+                <AppText variant="caption" color="muted">
+                  Category
+                </AppText>
+                <View style={styles.categoryValue}>
+                  <Icon
+                    name={CATEGORIES[category].icon as IconName}
+                    size={20}
+                    tint={colors.categories[category]}
+                  />
+                  <AppText variant="bodyStrong">{CATEGORIES[category].label}</AppText>
+                </View>
+              </View>
+              <Icon
+                name={pickingCategory ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color="muted"
+              />
+            </PressableScale>
+            {pickingCategory ? (
+              <CategoryGrid
+                selected={category}
+                onSelect={(c) => {
+                  setCategory(c);
+                  setPickingCategory(false);
+                }}
+              />
+            ) : null}
           </View>
 
           {/* If amount is 0 or empty: Educational Helper State */}
@@ -353,6 +391,79 @@ export default function AffordScreen() {
                 recommendation={simulation.recommendation}
                 colors={colors}
               />
+
+              <View
+                style={[
+                  styles.afterCard,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View
+                  style={styles.afterCell}
+                  accessible
+                  accessibilityLabel={`After purchase: ${formatINRWhole(simulation.projection.projectedPaydayBalancePaise)} remaining this cycle`}
+                >
+                  <View style={styles.afterLabel}>
+                    <AppText variant="caption" color="muted">
+                      After purchase
+                    </AppText>
+                  </View>
+                  <AppText
+                    variant="heading"
+                    tabular
+                    color={
+                      simulation.projection.projectedPaydayBalancePaise < 0 ? 'coralText' : 'text'
+                    }
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {formatINRWhole(simulation.projection.projectedPaydayBalancePaise)}
+                  </AppText>
+                  <AppText variant="caption" color="muted">
+                    remaining
+                  </AppText>
+                </View>
+                <View style={[styles.afterDivider, { backgroundColor: colors.border }]} />
+                <View
+                  style={styles.afterCell}
+                  accessible
+                  accessibilityLabel={`Daily allowance after purchase: ${formatINRWhole(simulation.projection.projectedDailySafeToSpendPaise)} per day`}
+                >
+                  <View style={styles.afterLabel}>
+                    <AppText variant="caption" color="muted">
+                      Daily allowance
+                    </AppText>
+                  </View>
+                  <AppText
+                    variant="heading"
+                    tabular
+                    color={getTierColorName(simulation.tier)}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {formatINRWhole(simulation.projection.projectedDailySafeToSpendPaise)}
+                  </AppText>
+                  <AppText variant="caption" color="muted">
+                    per day
+                  </AppText>
+                </View>
+                <View style={styles.afterInfo}>
+                  <InfoButton topic="afterPurchase" />
+                </View>
+              </View>
+
+              {simulation.tier !== 'SAFE' ? (
+                <Button
+                  label="Try a lower amount"
+                  icon="options-outline"
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => undefined);
+                    setAmountPaise(null);
+                    setConfirmedId(null);
+                  }}
+                  accessibilityHint="Clears the amount so you can enter a smaller one"
+                />
+              ) : null}
 
               {/* Before and After Comparison Grid */}
               <View
@@ -703,10 +814,10 @@ function OutcomeBanner({
         <View style={styles.bannerTitleCol}>
           <AppText variant="caption" color={stylesConfig.textColor} style={styles.tierLabel}>
             {tier === 'SAFE'
-              ? '● SAFE TO PURCHASE'
+              ? 'Fits your plan'
               : tier === 'CAUTION'
-                ? '▲ PROCEED WITH CAUTION'
-                : '✕ NOT RECOMMENDED THIS CYCLE'}
+                ? 'Possible, with care'
+                : 'Not a good time for this'}
           </AppText>
           <AppText variant="heading" style={styles.bannerHeadline}>
             {recommendation.headline}
@@ -771,10 +882,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.md,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
+    width: 44,
+    height: 44,
+    marginLeft: -SPACE.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -782,6 +892,21 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  headerTitle: { fontSize: 22, lineHeight: 30 },
+  flex: { flex: 1 },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, minHeight: 48 },
+  categoryValue: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: 2 },
+  afterCard: {
+    flexDirection: 'row',
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.sm,
+  },
+  afterCell: { flex: 1, alignItems: 'center', gap: 2, paddingHorizontal: SPACE.sm },
+  afterLabel: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  afterDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  afterInfo: { position: 'absolute', top: SPACE.sm, right: SPACE.sm },
 
   // Segmented control
   segmentedWrap: {
@@ -801,23 +926,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  segmentActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-  },
+  // The selected option is marked by its teal border and tint; no shadow.
+  segmentActive: {},
 
   modeContent: {
-    gap: SPACE.md,
+    gap: SPACE.lg,
     paddingBottom: SPACE.xxxl,
   },
 
   // Input Card
   inputCard: {
     borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    padding: SPACE.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.lg + 2,
     gap: SPACE.md,
   },
   presetsRow: {

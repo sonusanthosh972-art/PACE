@@ -44,15 +44,24 @@ describe('brand & splash colours', () => {
   });
 });
 
-it('uses the specified base colours', () => {
+it('uses the PACE brand colours', () => {
   expect(COLORS).toMatchObject({
-    bg: '#16171A',
-    surface: '#1F2125',
-    elevated: '#282B30',
-    text: '#E9E7E2',
-    muted: '#9C9A94',
-    accent: '#7BC6A4',
-    amber: '#E3B169',
-    coral: '#E08A7A',
+    bg: '#0B0F19',
+    surface: '#111827',
+    elevated: '#151E2D',
+    secondaryBg: '#1C2738',
+    border: '#273449',
+    text: '#F8FAFC',
+    muted: '#94A3B8',
+    primary: '#2DD4BF',
+    amber: '#FBBF24',
+    coral: '#F87171',
   });
+});
+
+it('keeps no gold or forest green from the previous theme', () => {
+  const all = JSON.stringify(COLORS).toUpperCase();
+  for (const old of ['#D4AF37', '#081F17', '#12382B', '#154734', '#0D2A20', '#72C99B']) {
+    expect(all).not.toContain(old);
+  }
 });
